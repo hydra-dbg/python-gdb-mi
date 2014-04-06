@@ -1,13 +1,35 @@
 import re
 DIGITS = re.compile('\d+(\.\d+)?')
 
+class ParsingError(Exception):
+   def __init__(self, message, raw, error_found_at):
+      msg = "%s. Found near:\n  %s" % (message, raw[((error_found_at-20) if error_found_at >= 20 else 0):error_found_at])
+      Exception.__init__(self, message)
+
+class UnexpectedToken(ParsingError):
+   def __init__(self, token, raw, error_found_at):
+      msg = "Unexpected token '%c'." % token
+      ParsingError.__init__(self, msg, raw, error_found_at)
+
+
+def check_end_of_input_at_begin(func):
+   def wrapper(self, string, offset):
+      if len(string) > offset:
+         return func(self, string, offset)
+      else:
+         raise ParsingError("End of input.", string, offset)
+
+   return wrapper
 
 class Result:
+   @check_end_of_input_at_begin
    def parse(self, string, offset):
       self.variable = Variable()
       offset = self.variable.parse(string, offset)
 
-      assert string[offset] == '='
+      if not string[offset] == '=':
+         raise UnexpectedToken(string[offset], string, offset)
+
       offset += 1
 
       self.value = Value()
@@ -16,14 +38,16 @@ class Result:
       return offset
 
    def as_native(self):
-      return [self.value.as_native(), self.value.as_native()]
+      return [self.variable.as_native(), self.value.as_native()]
 
 
 class Variable:
+   @check_end_of_input_at_begin
    def parse(self, string, offset):
       i = string[offset:].find('=')
       if i < 0:
-         raise Exception("Token '=' not found")
+         raise ParsingError("Token '=' not found", string, offset)
+
       self.name = string[offset:offset+i]
 
       return offset+i
@@ -33,14 +57,18 @@ class Variable:
 
 
 class Value:
+   @check_end_of_input_at_begin
    def parse(self, string, offset):
       c = string[offset]
 
-      self.value = {
-            '"': CString(),
-            '{': Tuple(),
-            '[': List(),
-            }[c]
+      try:
+         self.value = {
+               '"': CString(),
+               '{': Tuple(),
+               '[': List(),
+               }[c]
+      except KeyError:
+         raise UnexpectedToken(c, string, offset)
 
       offset = self.value.parse(string, offset)
       return offset
@@ -49,13 +77,19 @@ class Value:
       return self.value.as_native()
 
 class CString:
+   @check_end_of_input_at_begin
    def parse(self, string, offset):
-      assert string[offset] == '"'
+      if not string[offset] == '"':
+         raise ParsingError("Wrong begin. Expected a double quote '\"'.", string, offset)
+
+      end = False
       
       escaped = False
       for i, c in enumerate(string[offset+1:]):
          if c == '"' and not escaped:
-            self.value = string[offset+1:offset+1+i]
+            self.value = string[offset+1:offset+1+i].decode('string_escape')
+            consumed = i
+            end = True
             break
 
          if c == '\\':
@@ -63,16 +97,20 @@ class CString:
          else:
             escaped = False
 
+      if not end:
+         raise ParsingError("End of input found without close the c-string. Expecting a '\"'.", string, offset)
 
-      return offset + len(self.value) + 2
+      return offset + consumed + 2
 
    def as_native(self):
       return self.value
 
 
 class Tuple:
+   @check_end_of_input_at_begin
    def parse(self, string, offset):
-      assert string[offset] == '{'
+      if not string[offset] == '{':
+         raise ParsingError("Wrong begin. Expected a '{'.", string, offset)
 
       self.value = []
       
@@ -80,14 +118,23 @@ class Tuple:
       while string[offset] != '}':
          self.value.append(Result())
          offset = self.value[-1].parse(string, offset)
-         assert string[offset] in (",", "}")
+
+         if offset >= len(string):
+            raise ParsingError("End of input found without close the tuple (aka dictionary). Expecting a '}'.", string, offset)
+
+         if not string[offset] in (",", "}"):
+            raise UnexpectedToken(string[offset], string, offset)
+
+         if string[offset] == ",":
+            offset += 1
 
 
       return offset + 1
 
    def as_native(self):
       native = {}
-      for key, val in self.value:
+      for result in self.value:
+         key, val = result.as_native()
          if key in native:
             if isinstance(native[key], list):
                native[key].append(val)
@@ -99,8 +146,10 @@ class Tuple:
       return native
 
 class List:
+   @check_end_of_input_at_begin
    def parse(self, string, offset):
-      assert string[offset] == '['
+      if not string[offset] == '[':
+         raise ParsingError("Wrong begin. Expected a '['.", string, offset)
 
       self.value = []
       
@@ -110,9 +159,17 @@ class List:
          Elem = Value if string[offset] in ('"', '{', '[') else Result
 
       while string[offset] != ']':
-         self.value.append(Result())
+         self.value.append(Elem())
          offset = self.value[-1].parse(string, offset)
-         assert string[offset] in (",", "]")
+
+         if offset >= len(string):
+            raise ParsingError("End of input found without close the list. Expecting a ']'.", string, offset)
+
+         if not string[offset] in (",", "]"):
+            raise UnexpectedToken(string[offset], string, offset)
+
+         if string[offset] == ",":
+            offset += 1
 
 
       return offset + 1
@@ -124,6 +181,7 @@ class Word:
    def __init__(self, delimiters):
       self.delimiters = delimiters
 
+   @check_end_of_input_at_begin
    def parse(self, string, offset):
       i = 0
       while string[offset+i] not in self.delimiters:
@@ -139,6 +197,7 @@ class Word:
 
 
 class AsyncOutput:
+   @check_end_of_input_at_begin
    def parse(self, string, offset):
       self.async_class = Word((',', '\r', '\n'))
       offset = self.async_class.parse(string, offset)
@@ -154,7 +213,8 @@ class AsyncOutput:
 
    def as_native(self):
       native = {}
-      for key, val in self.value:
+      for result in self.results:
+         key, val = result.as_native()
          if key in native:
             if isinstance(native[key], list):
                native[key].append(val)
@@ -168,12 +228,16 @@ class AsyncOutput:
                results=native)
 
 class AsyncRecord:
+   @check_end_of_input_at_begin
    def parse(self, string, offset):
-      self.type = {
-            "*": "Exec",
-            "+": "Status",
-            "=": "Notify",
-            }[string[offset]]
+      try:
+         self.type = {
+               "*": "Exec",
+               "+": "Status",
+               "=": "Notify",
+               }[string[offset]]
+      except KeyError:
+         raise UnexpectedToken(string[offset], string, offset)
 
       offset += 1
       self.output = AsyncOutput()
@@ -187,13 +251,19 @@ class AsyncRecord:
       return d
 
 class StreamRecord:
+   @check_end_of_input_at_begin
    def parse(self, string, offset):
-      assert string[offset] in ("~", "@", "&")
-      self.type = {
-            "~": "Console",
-            "@": "Target",
-            "&": "Log",
-            }[string[offset]]
+      if not string[offset] in ("~", "@", "&"):
+         raise UnexpectedToken(string[offset], string, offset)
+
+      try:
+         self.type = {
+               "~": "Console",
+               "@": "Target",
+               "&": "Log",
+               }[string[offset]]
+      except KeyError:
+         raise UnexpectedToken(string[offset], string, offset)
 
       offset += 1
       self.value = CString()
@@ -211,8 +281,10 @@ class Stream:
 
 
 class ResultRecord:
+   @check_end_of_input_at_begin
    def parse(self, string, offset):
-      assert string[offset] == "^"
+      if not string[offset] == "^":
+         raise UnexpectedToken(string[offset], string, offset)
       offset += 1
 
       self.result_class = Word((',', '\r', '\n'))
@@ -229,7 +301,8 @@ class ResultRecord:
 
    def as_native(self):
       native = {}
-      for key, val in self.value:
+      for result in self.results:
+         key, val = result.as_native()
          if key in native:
             if isinstance(native[key], list):
                native[key].append(val)
@@ -238,7 +311,7 @@ class ResultRecord:
          else:
             native[key] = val
 
-      r = Result(klass=self.result_class.as_native(), results = native)
+      r = Record(klass=self.result_class.as_native(), results = native)
       r.type = 'Sync'
       return r
 
@@ -249,6 +322,7 @@ class Record:
       
       self.token = None
       self.type = None
+
 
 
 class Output:
