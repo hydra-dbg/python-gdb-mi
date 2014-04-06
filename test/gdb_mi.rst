@@ -1,5 +1,5 @@
 The output of the GDB Machine Interface is compound of small elements
-The most basic are the c-string. As all the objects that can be found in
+The most basic are the c-strings. As all the objects that can be found in
 gdb_mi, the c-string objects support parse a raw string and transform it
 into a python-native object.
 
@@ -13,10 +13,10 @@ into a python-native object.
    >>> s.as_native()
    'fooo'
 
-The method *parse* take two arguments, the full raw string and the offset where
-start to read from it and parse it.
+The *parse* method take two arguments, the full raw string and the offset where
+to start read from it and parse it.
 The result of this method is the updated offset.
-After the correct parsing, the method as_native will return the simple python objects
+After the correct parsing, the as_native method will return the simple python objects
 representing the data parsed.
 
 In the case of the c-string, the returned native object is, of course, a string.
@@ -55,7 +55,7 @@ The c-string support any valid string with the correct escape sequences
    >>> s.as_native()
    '\\ \n'
 
-With the c-string implemented, more complex can be built like lists or tuples (dicts)
+With the c-string implemented, more complex objects can be built like lists or tuples (dicts)
 
 ::
 
@@ -108,6 +108,17 @@ With the c-string implemented, more complex can be built like lists or tuples (d
    >>> sorted(t.as_native().iteritems()) # we 'sort' the dictionary to make easy the testing
    [('a', 'b'), ('c', 'd')]
 
+
+The ugly part of the tuples are the possibility of repeated keys.
+In that case, the set of values with the same key are merged into a single entry 
+in the dictionary and its value will be the list of the original values.
+
+::
+   >>> t = Tuple()
+   >>> t.parse(r'{a="b",a="d"}', 0)
+   13
+   >>> t.as_native()
+   {'a': ['b', 'd']}
 
 Of course, wrong inputs are catched
 
@@ -181,4 +192,63 @@ The other top level construction are the Stream. These are unstructured c-string
    >>> stream = s.as_native()
    >>> stream.type, stream.stream
    ('Log', 'baz')
+
+Finally, the messages returned by GDB are a sequence (may be empty) of asynchronious 
+messages and streams, followed by an optional result record. Then, the special token
+'(gdb)' should be found, followed by a newline.
+
+Instead of delivery these big messages one by one, the Output parser will deliver
+each asynchronious message / stream / result separately.
+
+::
+   >>> o = Output()
+   
+   >>> text = '(gdb)\n'
+   >>> o.parse_line(text)
+   '(gdb)'
+
+   >>> text = '~"foo"\n'
+   >>> stream = o.parse_line(text)
+   >>> stream.type, stream.stream
+   ('Console', 'foo')
+
+
+For example, this is the message after setting a breakpoint
+
+::
+   >>> o = Output()
+
+   >>> text = '^done,bkpt={number="1",type="breakpoint",disp="keep",enabled="y",addr="0x08048564",func="main",file="myprog.c",fullname="/home/nickrob/myprog.c",line="68",thread-groups=["i1"],times="0"}\n'
+   >>> record = o.parse_line(text)
+   >>> record.klass, record.type
+   ('done', 'Sync')
+   >>> len(record.results)
+   1
+   >>> sorted(record.results['bkpt'].iteritems())
+   [('addr', '0x08048564'), ('disp', 'keep'), ('enabled', 'y'), ('file', 'myprog.c'), ('fullname', '/home/nickrob/myprog.c'), ('func', 'main'), ('line', '68'), ('number', '1'), ('thread-groups', ['i1']), ('times', '0'), ('type', 'breakpoint')]
+
+
+Or, when a execution is stopped
+
+::
+   >>> o = Output()
+
+   >>> text = '*stopped,reason="breakpoint-hit",disp="keep",bkptno="1",thread-id="0",frame={addr="0x08048564",func="main",args=[{name="argc",value="1"},{name="argv",value="0xbfc4d4d4"}],file="myprog.c",fullname="/home/nickrob/myprog.c",line="68"}\n'
+   >>> record = o.parse_line(text)
+   >>> record.klass, record.type
+   ('stopped', 'Exec')
+   >>> len(record.results)
+   5
+   >>> record.results['reason'], record.results['disp'], record.results['bkptno'], record.results['thread-id']
+   ('breakpoint-hit', 'keep', '1', '0')
+
+   >>> frame = record.results['frame']
+   >>> frame['addr'], frame['func'], frame['file'], frame['fullname'], frame['line']
+   ('0x08048564', 'main', 'myprog.c', '/home/nickrob/myprog.c', '68')
+
+   >>> main_args = frame['args']
+   >>> main_args[0]['name'], main_args[0]['value']
+   ('argc', '1')
+   >>> main_args[1]['name'], main_args[1]['value']
+   ('argv', '0xbfc4d4d4')
 

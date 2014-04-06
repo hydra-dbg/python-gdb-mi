@@ -330,8 +330,8 @@ class Output:
       assert line[-1] == '\n'
 
       #import pdb; pdb.set_trace()        #     :)  
-      if line == "(gdb)":
-         return line
+      if line == "(gdb)\n":
+         return line[:-1]
 
       if line[0] in ("~", "@", "&"):
          out = StreamRecord()
