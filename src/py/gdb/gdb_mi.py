@@ -330,8 +330,12 @@ class Output:
       assert line[-1] == '\n'
 
       #import pdb; pdb.set_trace()        #     :)  
-      if line == "(gdb)\n":
-         return line[:-1]
+
+      #XXX the space between the string and the newline is not specified in the
+      # GDB's documentation. However it's seems to be necessary.
+      if line == "(gdb) \n": 
+         # we always return this string
+         return "(gdb)" 
 
       if line[0] in ("~", "@", "&"):
          out = StreamRecord()

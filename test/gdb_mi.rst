@@ -203,7 +203,7 @@ each asynchronious message / stream / result separately.
 ::
    >>> o = Output()
    
-   >>> text = '(gdb)\n'
+   >>> text = '(gdb) \n'  #the extra space is not specified in GDB's docs but it's necessary
    >>> o.parse_line(text)
    '(gdb)'
 
