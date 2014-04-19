@@ -1,4 +1,4 @@
-import re
+import re, pprint
 DIGITS = re.compile('\d+(\.\d+)?')
 
 class ParsingError(Exception):
@@ -21,6 +21,12 @@ def check_end_of_input_at_begin(func):
 
    return wrapper
 
+def _attributes_as_string(instance):
+   attrnames = filter(lambda attrname: not attrname.startswith("_"), dir(instance))
+   attrnames = filter(lambda attrname: not callable(getattr(instance, attrname)), attrnames)
+   
+   return pprint.pformat(dict([(attrname, getattr(instance, attrname)) for attrname in attrnames]))
+
 class Result:
    @check_end_of_input_at_begin
    def parse(self, string, offset):
@@ -40,19 +46,25 @@ class Result:
    def as_native(self):
       return [self.variable.as_native(), self.value.as_native()]
 
+   def __repr__(self):
+      return str(self.variable) + " = " + _attributes_as_string(self.value)
+
 
 class Variable:
    @check_end_of_input_at_begin
    def parse(self, string, offset):
       i = string[offset:].find('=')
       if i < 0:
-         raise ParsingError("Token '=' not found", string, offset)
+         raise ParsingError("Token '=' not found.", string, offset)
 
       self.name = string[offset:offset+i]
 
       return offset+i
 
    def as_native(self):
+      return self.name
+
+   def __repr__(self):
       return self.name
 
 
@@ -75,6 +87,9 @@ class Value:
 
    def as_native(self):
       return self.value.as_native()
+
+   def __repr__(self):
+      return pprint.pformat(self.as_native())
 
 class CString:
    @check_end_of_input_at_begin
@@ -104,6 +119,9 @@ class CString:
 
    def as_native(self):
       return self.value
+
+   def __repr__(self):
+      return pprint.pformat(self.as_native())
 
 
 class Tuple:
@@ -145,6 +163,9 @@ class Tuple:
 
       return native
 
+   def __repr__(self):
+      return pprint.pformat(self.as_native())
+
 class List:
    @check_end_of_input_at_begin
    def parse(self, string, offset):
@@ -177,6 +198,9 @@ class List:
    def as_native(self):
       return [val.as_native() for val in self.value]
 
+   def __repr__(self):
+      return pprint.pformat(self.as_native())
+
 class Word:
    def __init__(self, delimiters):
       self.delimiters = delimiters
@@ -194,6 +218,8 @@ class Word:
    def as_native(self):
       return self.value
 
+   def __repr__(self):
+      return pprint.pformat(self.as_native())
 
 
 class AsyncOutput:
@@ -227,6 +253,9 @@ class AsyncOutput:
       return Record(klass= self.async_class.as_native(),
                results=native)
 
+   def __repr__(self):
+      return pprint.pformat(self.as_native())
+
 class AsyncRecord:
    @check_end_of_input_at_begin
    def parse(self, string, offset):
@@ -249,6 +278,9 @@ class AsyncRecord:
       d = self.output.as_native()
       d.type = self.type
       return d
+
+   def __repr__(self):
+      return pprint.pformat(self.as_native())
 
 class StreamRecord:
    @check_end_of_input_at_begin
@@ -274,10 +306,16 @@ class StreamRecord:
    def as_native(self):
       return Stream(self.type, self.value.as_native())
 
+   def __repr__(self):
+      return pprint.pformat(self.as_native())
+
 class Stream:
    def __init__(self, type, s):
       self.type = type
       self.stream = s
+
+   def __repr__(self):
+      return _attributes_as_string(self)
 
 
 class ResultRecord:
@@ -315,6 +353,9 @@ class ResultRecord:
       r.type = 'Sync'
       return r
 
+   def __repr__(self):
+      return pprint.pformat(self.as_native())
+
 class Record:
    def __init__(self, klass, results):
       self.klass = klass
@@ -323,6 +364,8 @@ class Record:
       self.token = None
       self.type = None
 
+   def __repr__(self):
+      return _attributes_as_string(self)
 
 
 class Output:
