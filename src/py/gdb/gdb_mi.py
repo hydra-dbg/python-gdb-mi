@@ -3,8 +3,11 @@ DIGITS = re.compile('\d+(\.\d+)?')
 
 class ParsingError(Exception):
    def __init__(self, message, raw, error_found_at):
-      msg = "%s. Found near:\n  %s" % (message, raw[((error_found_at-20) if error_found_at >= 20 else 0):error_found_at])
-      Exception.__init__(self, message)
+      begin = (error_found_at-30) if error_found_at >= 30 else 0
+      end   = (error_found_at+30)
+
+      msg = "%s. Found near:\n  %s" % (message, raw[begin:end])
+      Exception.__init__(self, msg)
 
 class UnexpectedToken(ParsingError):
    def __init__(self, token, raw, error_found_at):
