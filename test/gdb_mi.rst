@@ -4,7 +4,8 @@ gdb_mi, the c-string objects support parse a raw string and transform it
 into a python-native object.
 
 ::
-   
+ 
+   >>> import pprint
    >>> from gdb.gdb_mi import *
    >>> 
    >>> s = CString()
@@ -30,13 +31,13 @@ Any incorrect input will raise an exception
 
 ::
    
-   >>> s.parse('xxx', 0)
+   >>> s.parse('xxx', 0)                                 #doctest: +ELLIPSIS
    Traceback (most recent call last):
-   ParsingError: Wrong begin. Expected a double quote '"'.
-
-   >>> s.parse('"f...', 0)
+   ParsingError: Wrong begin. Expected a double quote '"'...
+   
+   >>> s.parse('"f...', 0)                               #doctest: +ELLIPSIS
    Traceback (most recent call last):
-   ParsingError: End of input found without close the c-string. Expecting a '"'.
+   ParsingError: End of input found without close the c-string. Expecting a '"'...
 
 The c-string support any valid string with the correct escape sequences
 
@@ -149,40 +150,40 @@ Of course, wrong inputs are catched
 
    >>> l = List()
 
-   >>> l.parse(r'["x"', 0)
+   >>> l.parse(r'["x"', 0)                               #doctest: +ELLIPSIS
    Traceback (most recent call last):
-   ParsingError: End of input found without close the list. Expecting a ']'.
+   ParsingError: End of input found without close the list. Expecting a ']'...
 
-   >>> l.parse(r'"xxx"]', 0)
+   >>> l.parse(r'"xxx"]', 0)                             #doctest: +ELLIPSIS
    Traceback (most recent call last):
-   ParsingError: Wrong begin. Expected a '['.
+   ParsingError: Wrong begin. Expected a '['...
    
 ::
    >>> t = Tuple()
 
-   >>> t.parse(r'{x', 0)
+   >>> t.parse(r'{x', 0)                             #doctest: +ELLIPSIS
    Traceback (most recent call last):
-   ParsingError: Token '=' not found.
+   ParsingError: Token '=' not found...
 
-   >>> t.parse(r'{x=', 0)
+   >>> t.parse(r'{x=', 0)                             #doctest: +ELLIPSIS
    Traceback (most recent call last):
-   ParsingError: End of input.
+   ParsingError: End of input...
 
-   >>> t.parse(r'{x=}', 0)
+   >>> t.parse(r'{x=}', 0)                             #doctest: +ELLIPSIS
    Traceback (most recent call last):
-   UnexpectedToken: Unexpected token '}'.
+   UnexpectedToken: Unexpected token '}'...
 
-   >>> t.parse(r'{=xx}', 0)
+   >>> t.parse(r'{=xx}', 0)                             #doctest: +ELLIPSIS
    Traceback (most recent call last):
-   UnexpectedToken: Unexpected token 'x'.
+   UnexpectedToken: Unexpected token 'x'...
 
-   >>> t.parse(r'{xx}', 0)
+   >>> t.parse(r'{xx}', 0)                             #doctest: +ELLIPSIS
    Traceback (most recent call last):
-   ParsingError: Token '=' not found.
+   ParsingError: Token '=' not found...
 
-   >>> t.parse(r'xx}', 0)
+   >>> t.parse(r'xx}', 0)                             #doctest: +ELLIPSIS
    Traceback (most recent call last):
-   ParsingError: Wrong begin. Expected a '{'.
+   ParsingError: Wrong begin. Expected a '{'...
 
 At the top most of the construction, the structured messages returned by GDB are 
 AsyncRecords and ResultRecord.
@@ -197,16 +198,24 @@ can be a c-string, a list or a tuple, endig the list with a newline.
    >>> record = r.as_native()
    >>> record.klass, record.type, record.results
    ('foo', 'Exec', {})
-   >>> print record
-   {'klass': 'foo', 'results': {}, 'token': None, 'type': 'Exec'}
+   >>> record
+   {'klass': 'foo',
+    'last_stream_records': [],
+    'results': {},
+    'token': None,
+    'type': 'Exec'}
 
    >>> r.parse('+bar,a="b"\n', 0)
    10
    >>> record = r.as_native()
    >>> record.klass, record.type, record.results
    ('bar', 'Status', {'a': 'b'})
-   >>> print record
-   {'klass': 'bar', 'results': {'a': 'b'}, 'token': None, 'type': 'Status'}
+   >>> record
+   {'klass': 'bar',
+    'last_stream_records': [],
+    'results': {'a': 'b'},
+    'token': None,
+    'type': 'Status'}
 
    >>> r.parse('=baz,a=[],b={c="d"}\n', 0)
    19
@@ -215,19 +224,25 @@ can be a c-string, a list or a tuple, endig the list with a newline.
    ('baz', 'Notify', {'a': [], 'b': {'c': 'd'}})
    >>> print record                          #doctest: +NORMALIZE_WHITESPACE
    {'klass': 'baz', 
+    'last_stream_records': [],
     'results': {'a': [], 'b': {'c': 'd'}}, 
     'token': None, 
     'type': 'Notify'}
    
 ::
-   >>> r = ResultRecord()
+
+   >>> r = ResultRecord(last_stream_records=[])
    >>> r.parse('^bar,a="b"\n', 0)
    10
    >>> record = r.as_native()
    >>> record.klass, record.type, record.results
    ('bar', 'Sync', {'a': 'b'})
-   >>> print record
-   {'klass': 'bar', 'results': {'a': 'b'}, 'token': None, 'type': 'Sync'}
+   >>> record
+   {'klass': 'bar',
+    'last_stream_records': [],
+    'results': {'a': 'b'},
+    'token': None,
+    'type': 'Sync'}
 
 The other top level construction are the Stream. These are unstructured c-strings.
 
@@ -279,6 +294,29 @@ each asynchronious message / stream / result separately.
    {'stream': 'foo', 'type': 'Console'}
 
 
+But all the ResultRecord have the last StreamRecords included (yes, they are duplicated).
+This is done because in some cases this is more useful, but in other cases,
+delivering each StreamRecord and ResultRecord as separated messages is better.
+
+::
+
+   >>> s1 = StreamRecord()
+   >>> _ = s1.parse('~"foo"\n', 0)
+
+   >>> s2 = StreamRecord()
+   >>> _ = s2.parse('~"bar"\n', 0)
+
+   >>> r = ResultRecord(last_stream_records=[s1, s2])
+   >>> _ = r.parse('^zaz\n', 0)
+
+   >>> record = r.as_native()
+   >>> record.klass, record.type, record.results
+   ('zaz', 'Sync', {})
+   >>> for r in record.last_stream_records:
+   ...     pprint.pprint(r)
+   {'stream': 'foo', 'type': 'Console'}
+   {'stream': 'bar', 'type': 'Console'}
+
 For example, this is the message after setting a breakpoint
 
 ::
@@ -294,6 +332,7 @@ For example, this is the message after setting a breakpoint
    [('addr', '0x08048564'), ('disp', 'keep'), ('enabled', 'y'), ('file', 'myprog.c'), ('fullname', '/home/nickrob/myprog.c'), ('func', 'main'), ('line', '68'), ('number', '1'), ('thread-groups', ['i1']), ('times', '0'), ('type', 'breakpoint')]
    >>> print record                       #doctest: +NORMALIZE_WHITESPACE
    {'klass': 'done',
+    'last_stream_records': [],
     'results': {'bkpt': {'addr': '0x08048564',
                          'disp': 'keep',
                          'enabled': 'y',
@@ -324,6 +363,7 @@ Or, when a execution is stopped
    ('breakpoint-hit', 'keep', '1', '0')
    >>> print record                       #doctest: +NORMALIZE_WHITESPACE
    {'klass': 'stopped',
+   'last_stream_records': [],
    'results': {'bkptno': '1',
                'disp': 'keep',
                'frame': {'addr': '0x08048564',
