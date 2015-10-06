@@ -254,7 +254,7 @@ class AsyncOutput:
 
       
       return Record(klass= self.async_class.as_native(),
-               results=native, last_stream_records=[])
+               results=native)
 
    def __repr__(self):
       return pprint.pformat(self.as_native())
@@ -324,8 +324,6 @@ class Stream:
       return vars(self)
 
 class ResultRecord:
-   def __init__(self, last_stream_records):
-      self.last_stream_records = last_stream_records
 
    @check_end_of_input_at_begin
    def parse(self, string, offset):
@@ -358,8 +356,7 @@ class ResultRecord:
             native[key] = val
 
       r = Record( klass = self.result_class.as_native(), 
-                  results = native,
-                  last_stream_records = [s.as_native().as_native() for s in self.last_stream_records])
+                  results = native)
       r.type = 'Sync'
       return r
 
@@ -367,10 +364,9 @@ class ResultRecord:
       return pprint.pformat(self.as_native())
 
 class Record:
-   def __init__(self, klass, results, last_stream_records):
+   def __init__(self, klass, results):
       self.klass = klass
       self.results = results
-      self.last_stream_records = last_stream_records
       
       self.token = None
       self.type = None
@@ -380,9 +376,6 @@ class Record:
 
 
 class Output:
-   def __init__(self):
-      self.last_stream_records = []
-
    def parse_line(self, line):
       assert line[-1] == '\n'
 
@@ -397,7 +390,6 @@ class Output:
       if line[0] in ("~", "@", "&"):
          out = StreamRecord()
          out.parse(line, 0)
-         self.last_stream_records.append(out)
          return out.as_native()
 
       token = DIGITS.match(line)
@@ -411,8 +403,7 @@ class Output:
          token = None
 
       if line[offset] == "^":
-         out = ResultRecord(self.last_stream_records)
-         self.last_stream_records = []
+         out = ResultRecord()
       else:
          out = AsyncRecord()
 
