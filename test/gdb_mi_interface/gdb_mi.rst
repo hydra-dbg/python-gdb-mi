@@ -350,3 +350,9 @@ Or, when a execution is stopped
    >>> main_args[1]['name'], main_args[1]['value']
    ('argv', '0xbfc4d4d4')
 
+   >>> text = '=breakpoint-modified,bkpt={number="1",type="breakpoint",disp="keep",enabled="y",addr="<MULTIPLE>",times="1",original-location="roll"},{number="1.1",enabled="y",addr="0x08048563",func="roll",file="two_pthreads.c",fullname="/threads/two_pthreads.c",line="5",thread-groups=["i1"]},{number="1.2",enabled="y",addr="0x08048563",func="roll",file="two_pthreads.c",fullname="/threads/two_pthreads.c",line="5",thread-groups=["i2"]}\n'
+
+   >>> record = o.parse_line(text)
+   >>> record.klass, record.type
+
+   >>> record
