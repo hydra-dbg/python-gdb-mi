@@ -409,6 +409,13 @@ class Output:
 
       offset = out.parse(line, offset)
 
+      if len(line) != offset + 1:
+          # Workaround: handle the GDB's bug https://sourceware.org/bugzilla/show_bug.cgi?id=14733
+          # We create a new event to notify that multiple breakpoints were modified.
+          if isinstance(out, AsyncRecord) and out.output.async_class.value == 'breakpoint-modified':
+              fixed_line = line.replace('=breakpoint-modified,bkpt=', '=multiple-breakpoints-modified,bkpts=[')[:-1] + "]\n"
+              return self.parse_line(fixed_line)
+      
       assert len(line) == offset + 1
 
       record = out.as_native()

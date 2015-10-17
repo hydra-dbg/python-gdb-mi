@@ -350,9 +350,42 @@ Or, when a execution is stopped
    >>> main_args[1]['name'], main_args[1]['value']
    ('argv', '0xbfc4d4d4')
 
+
+Workaround: handle the GDB's bug https://sourceware.org/bugzilla/show_bug.cgi?id=14733
+We create a new event to notify that multiple breakpoints were modified:
+
+::
    >>> text = '=breakpoint-modified,bkpt={number="1",type="breakpoint",disp="keep",enabled="y",addr="<MULTIPLE>",times="1",original-location="roll"},{number="1.1",enabled="y",addr="0x08048563",func="roll",file="two_pthreads.c",fullname="/threads/two_pthreads.c",line="5",thread-groups=["i1"]},{number="1.2",enabled="y",addr="0x08048563",func="roll",file="two_pthreads.c",fullname="/threads/two_pthreads.c",line="5",thread-groups=["i2"]}\n'
 
    >>> record = o.parse_line(text)
    >>> record.klass, record.type
+   ('multiple-breakpoints-modified', 'Notify')
 
    >>> record
+   {'klass': 'multiple-breakpoints-modified',
+    'results': {'bkpts': [{'addr': '<MULTIPLE>',
+                           'disp': 'keep',
+                           'enabled': 'y',
+                           'number': '1',
+                           'original-location': 'roll',
+                           'times': '1',
+                           'type': 'breakpoint'},
+                          {'addr': '0x08048563',
+                           'enabled': 'y',
+                           'file': 'two_pthreads.c',
+                           'fullname': '/threads/two_pthreads.c',
+                           'func': 'roll',
+                           'line': '5',
+                           'number': '1.1',
+                           'thread-groups': ['i1']},
+                          {'addr': '0x08048563',
+                           'enabled': 'y',
+                           'file': 'two_pthreads.c',
+                           'fullname': '/threads/two_pthreads.c',
+                           'func': 'roll',
+                           'line': '5',
+                           'number': '1.2',
+                           'thread-groups': ['i2']}]},
+    'token': None,
+    'type': 'Notify'}
+
