@@ -47,7 +47,10 @@ class Result:
       return offset
 
    def as_native(self):
-      return [self.variable.as_native(), self.value.as_native()]
+      return {self.variable.as_native(): self.value.as_native()}
+
+   def as_native_key_value(self):
+      return (self.variable.as_native(), self.value.as_native())
 
    def __repr__(self):
       return str(self.variable) + " = " + _attributes_as_string(self.value)
@@ -155,7 +158,7 @@ class Tuple:
    def as_native(self):
       native = {}
       for result in self.value:
-         key, val = result.as_native()
+         key, val = result.as_native_key_value()
          if key in native:
             if isinstance(native[key], list):
                native[key].append(val)
@@ -243,7 +246,7 @@ class AsyncOutput:
    def as_native(self):
       native = {}
       for result in self.results:
-         key, val = result.as_native()
+         key, val = result.as_native_key_value()
          if key in native:
             if isinstance(native[key], list):
                native[key].append(val)
@@ -346,7 +349,7 @@ class ResultRecord:
    def as_native(self):
       native = {}
       for result in self.results:
-         key, val = result.as_native()
+         key, val = result.as_native_key_value()
          if key in native:
             if isinstance(native[key], list):
                native[key].append(val)
@@ -380,6 +383,8 @@ class Output:
       assert line[-1] == '\n'
 
       #import pdb; pdb.set_trace()        #     :)  
+      #if "BreakpointTable" in line:
+      #   import pdb; pdb.set_trace()        #     :)  
 
       #XXX the space between the string and the newline is not specified in the
       # GDB's documentation. However it's seems to be necessary.
@@ -391,6 +396,12 @@ class Output:
          out = StreamRecord()
          out.parse(line, 0)
          return out.as_native()
+
+      if "BreakpointTable={" in line:
+         # Workaround: handle the GDB's bug https://sourceware.org/bugzilla/show_bug.cgi?id=14733
+         # We remove the "bkpt=" string to trick the system and transform the body of the BreakpointTable 
+         # into an array or list of dictionaries.
+         line = line.replace("bkpt=", "")
 
       token = DIGITS.match(line)
       offset = 0
