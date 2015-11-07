@@ -6,7 +6,7 @@ class ParsingError(Exception):
       begin = (error_found_at-30) if error_found_at >= 30 else 0
       end   = (error_found_at+30)
 
-      msg = "%s. Found near:\n  %s" % (message, raw[begin:end])
+      msg = "%s. Found near:\n  %s\n%s\nOriginal message:\n  %s" % (message, raw[begin:end], " -" * 40, raw)
       Exception.__init__(self, msg)
 
 class UnexpectedToken(ParsingError):
@@ -397,12 +397,23 @@ class Output:
          out.parse(line, 0)
          return out.as_native()
 
+      # ###############
+      # Workaround: handle the GDB's bug https://sourceware.org/bugzilla/show_bug.cgi?id=14733
       if "BreakpointTable={" in line:
-         # Workaround: handle the GDB's bug https://sourceware.org/bugzilla/show_bug.cgi?id=14733
          # We remove the "bkpt=" string to trick the system and transform the body of the BreakpointTable 
          # into an array or list of dictionaries.
          line = line.replace("bkpt=", "")
 
+      if "^done,bkpt={" in line:
+         line = line.replace("^done,bkpt={", "^done,bkpts=[{")
+         line = line[:-1] + "]\n"
+      elif "=breakpoint-modified,bkpt={" in line:
+         line = line.replace("=breakpoint-modified,bkpt={", "=breakpoint-modified,bkpts=[{")
+         line = line[:-1] + "]\n"
+
+      #
+      ################
+              
       token = DIGITS.match(line)
       offset = 0
       if token:
@@ -421,13 +432,13 @@ class Output:
       offset = out.parse(line, offset)
 
       if len(line) != offset + 1:
-          # Workaround: handle the GDB's bug https://sourceware.org/bugzilla/show_bug.cgi?id=14733
-          # We create a new event to notify that multiple breakpoints were modified.
           if isinstance(out, AsyncRecord) and out.output.async_class.value == 'breakpoint-modified':
               fixed_line = line.replace('=breakpoint-modified,bkpt=', '=multiple-breakpoints-modified,bkpts=[')[:-1] + "]\n"
               return self.parse_line(fixed_line)
       
-      assert len(line) == offset + 1
+      if len(line) != offset + 1:
+          raise ParsingError("Length line %i is different from the last parsed offset %i" % (len(line), offset+1),
+                  line, offset)
 
       record = out.as_native()
       record.token = token

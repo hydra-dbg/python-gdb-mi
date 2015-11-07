@@ -283,6 +283,9 @@ each asynchronious message / stream / result separately.
 
 As an example, this is the message after setting a breakpoint
 
+Workaround: handle the GDB's bug https://sourceware.org/bugzilla/show_bug.cgi?id=14733
+We change the bkpt= by bkpts=, from a tuple/dict to a list of them.
+
 ::
    >>> o = Output()
 
@@ -292,21 +295,31 @@ As an example, this is the message after setting a breakpoint
    ('done', 'Sync')
    >>> len(record.results)
    1
-   >>> sorted(record.results['bkpt'].iteritems())
-   [('addr', '0x08048564'), ('disp', 'keep'), ('enabled', 'y'), ('file', 'myprog.c'), ('fullname', '/home/nickrob/myprog.c'), ('func', 'main'), ('line', '68'), ('number', '1'), ('thread-groups', ['i1']), ('times', '0'), ('type', 'breakpoint')]
-   >>> print record                       #doctest: +NORMALIZE_WHITESPACE
+   >>> pprint.pprint(record.results['bkpts'][0])       #doctest: +NORMALIZE_WHITESPACE
+   {'addr': '0x08048564',
+   'disp': 'keep',
+   'enabled': 'y',
+   'file': 'myprog.c',
+   'fullname': '/home/nickrob/myprog.c',
+   'func': 'main',
+   'line': '68',
+   'number': '1',
+   'thread-groups': ['i1'],
+   'times': '0',
+   'type': 'breakpoint'}
+   >>> record                          #doctest: +NORMALIZE_WHITESPACE
    {'klass': 'done',
-    'results': {'bkpt': {'addr': '0x08048564',
-                         'disp': 'keep',
-                         'enabled': 'y',
-                         'file': 'myprog.c',
-                         'fullname': '/home/nickrob/myprog.c',
-                         'func': 'main',
-                         'line': '68',
-                         'number': '1',
-                         'thread-groups': ['i1'],
-                         'times': '0',
-                         'type': 'breakpoint'}},
+    'results': {'bkpts': [{'addr': '0x08048564',
+                           'disp': 'keep',
+                           'enabled': 'y',
+                           'file': 'myprog.c',
+                           'fullname': '/home/nickrob/myprog.c',
+                           'func': 'main',
+                           'line': '68',
+                           'number': '1',
+                           'thread-groups': ['i1'],
+                           'times': '0',
+                           'type': 'breakpoint'}]},
     'token': None,
     'type': 'Sync'}
 
@@ -352,17 +365,17 @@ Or, when a execution is stopped
 
 
 Workaround: handle the GDB's bug https://sourceware.org/bugzilla/show_bug.cgi?id=14733
-We create a new event to notify that multiple breakpoints were modified:
+We change the bkpt= by bkpts=, from a tuple/dict to a list of them.
 
 ::
    >>> text = '=breakpoint-modified,bkpt={number="1",type="breakpoint",disp="keep",enabled="y",addr="<MULTIPLE>",times="1",original-location="roll"},{number="1.1",enabled="y",addr="0x08048563",func="roll",file="two_pthreads.c",fullname="/threads/two_pthreads.c",line="5",thread-groups=["i1"]},{number="1.2",enabled="y",addr="0x08048563",func="roll",file="two_pthreads.c",fullname="/threads/two_pthreads.c",line="5",thread-groups=["i2"]}\n'
 
    >>> record = o.parse_line(text)
    >>> record.klass, record.type
-   ('multiple-breakpoints-modified', 'Notify')
+   ('breakpoint-modified', 'Notify')
 
    >>> record
-   {'klass': 'multiple-breakpoints-modified',
+   {'klass': 'breakpoint-modified',
     'results': {'bkpts': [{'addr': '<MULTIPLE>',
                            'disp': 'keep',
                            'enabled': 'y',
