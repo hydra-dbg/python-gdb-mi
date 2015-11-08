@@ -365,17 +365,18 @@ Or, when a execution is stopped
 
 
 Workaround: handle the GDB's bug https://sourceware.org/bugzilla/show_bug.cgi?id=14733
-We change the bkpt= by bkpts=, from a tuple/dict to a list of them.
+We change the bkpt= by bkpts=, from a tuple/dict to a list of them. In order to keep consistent names,
+we change the event's name breakpoint-modified to breakpoints-modified
 
 ::
    >>> text = '=breakpoint-modified,bkpt={number="1",type="breakpoint",disp="keep",enabled="y",addr="<MULTIPLE>",times="1",original-location="roll"},{number="1.1",enabled="y",addr="0x08048563",func="roll",file="two_pthreads.c",fullname="/threads/two_pthreads.c",line="5",thread-groups=["i1"]},{number="1.2",enabled="y",addr="0x08048563",func="roll",file="two_pthreads.c",fullname="/threads/two_pthreads.c",line="5",thread-groups=["i2"]}\n'
 
    >>> record = o.parse_line(text)
    >>> record.klass, record.type
-   ('breakpoint-modified', 'Notify')
+   ('breakpoints-modified', 'Notify')
 
    >>> record
-   {'klass': 'breakpoint-modified',
+   {'klass': 'breakpoints-modified',
     'results': {'bkpts': [{'addr': '<MULTIPLE>',
                            'disp': 'keep',
                            'enabled': 'y',

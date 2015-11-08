@@ -408,7 +408,7 @@ class Output:
          line = line.replace("^done,bkpt={", "^done,bkpts=[{")
          line = line[:-1] + "]\n"
       elif "=breakpoint-modified,bkpt={" in line:
-         line = line.replace("=breakpoint-modified,bkpt={", "=breakpoint-modified,bkpts=[{")
+         line = line.replace("=breakpoint-modified,bkpt={", "=breakpoints-modified,bkpts=[{")
          line = line[:-1] + "]\n"
 
       #
@@ -431,11 +431,6 @@ class Output:
 
       offset = out.parse(line, offset)
 
-      if len(line) != offset + 1:
-          if isinstance(out, AsyncRecord) and out.output.async_class.value == 'breakpoint-modified':
-              fixed_line = line.replace('=breakpoint-modified,bkpt=', '=multiple-breakpoints-modified,bkpts=[')[:-1] + "]\n"
-              return self.parse_line(fixed_line)
-      
       if len(line) != offset + 1:
           raise ParsingError("Length line %i is different from the last parsed offset %i" % (len(line), offset+1),
                   line, offset)
