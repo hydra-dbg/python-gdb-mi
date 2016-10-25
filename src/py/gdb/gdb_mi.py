@@ -379,6 +379,40 @@ class Record:
 
 
 class Output:
+   def __init__(self):
+      self._line = None
+      self._chunks = []
+      self._more_lines_in_buffer = False
+
+   def are_more_to_be_parsed_already(self):
+      return self._more_lines_in_buffer
+
+   def parse(self, chunk):
+      if self._more_lines_in_buffer:
+          chunk = self._chunks[-1] + chunk
+          del self._chunks[-1]
+          self._more_lines_in_buffer = False
+
+      if '\n' in chunk:
+          tail, rest = chunk.split('\n', 1)
+          line = ''.join(self._chunks + [tail, '\n'])
+          self._chunks = []
+          self._more_lines_in_buffer = False
+
+          if rest:
+              self._chunks.append(rest)
+          
+          if '\n' in rest:
+              self._more_lines_in_buffer = True
+
+          record = self.parse_line(line)
+          assert record is not None
+          return record
+      
+      else:
+          self._chunks.append(chunk)
+          return None
+      
    def parse_line(self, line):
       assert line[-1] == '\n'
 
