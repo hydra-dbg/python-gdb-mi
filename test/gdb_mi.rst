@@ -6,7 +6,7 @@ into a python-native object.
 ::
  
    >>> import pprint
-   >>> from gdb.gdb_mi import *
+   >>> from gdb_mi import *
    >>> 
    >>> s = CString()
    >>> s.parse('"fooo"', 0)
