@@ -30,6 +30,12 @@ def _attributes_as_string(instance):
    
    return pprint.pformat(dict([(attrname, getattr(instance, attrname)) for attrname in attrnames]))
 
+def text_escape(bytes_or_str):
+   if isinstance(bytes_or_str, bytes):
+      return bytes_or_str.decode('string_escape')
+   else:
+      return bytes_or_str.encode('ascii').decode('unicode_escape')
+
 class Result:
    @check_end_of_input_at_begin
    def parse(self, string, offset):
@@ -108,7 +114,7 @@ class CString:
       escaped = False
       for i, c in enumerate(string[offset+1:]):
          if c == '"' and not escaped:
-            self.value = string[offset+1:offset+1+i].decode('string_escape')
+            self.value = text_escape(string[offset+1:offset+1+i])
             consumed = i
             end = True
             break

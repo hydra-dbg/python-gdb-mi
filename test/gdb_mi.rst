@@ -13,7 +13,7 @@ into a python-native object.
    6
    >>> s.as_native()
    'fooo'
-   >>> print s
+   >>> print(s)
    'fooo'
 
 The *parse* method take two arguments, the full raw string and the offset where
@@ -31,11 +31,11 @@ Any incorrect input will raise an exception
 
 ::
    
-   >>> s.parse('xxx', 0)                                 #doctest: +ELLIPSIS
+   >>> s.parse('xxx', 0)                                 #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    ParsingError: Wrong begin. Expected a double quote '"'...
    
-   >>> s.parse('"f...', 0)                               #doctest: +ELLIPSIS
+   >>> s.parse('"f...', 0)                               #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    ParsingError: End of input found without close the c-string. Expecting a '"'...
 
@@ -72,21 +72,21 @@ With the c-string implemented, more complex objects can be built like lists or t
    2
    >>> l.as_native()
    []
-   >>> print l
+   >>> print(l)
    []
 
    >>> l.parse(r'["a"]', 0)
    5
    >>> l.as_native()
    ['a']
-   >>> print l
+   >>> print(l)
    ['a']
 
    >>> l.parse(r'["a","b"]', 0)
    9
    >>> l.as_native()
    ['a', 'b']
-   >>> print l
+   >>> print(l)
    ['a', 'b']
 
 ::
@@ -96,14 +96,14 @@ With the c-string implemented, more complex objects can be built like lists or t
    2
    >>> t.as_native()
    {}
-   >>> print t
+   >>> print(t)
    {}
 
    >>> t.parse(r'{a="b"}', 0)
    7
    >>> t.as_native()
    {'a': 'b'}
-   >>> print t
+   >>> print(t)
    {'a': 'b'}
 
    >>> t.parse(r'{a=[]}', 0)
@@ -120,14 +120,14 @@ With the c-string implemented, more complex objects can be built like lists or t
    11
    >>> t.as_native()
    {'a': {'b': 'c'}}
-   >>> print t
+   >>> print(t)
    {'a': {'b': 'c'}}
 
    >>> t.parse(r'{a="b",c="d"}', 0)
    13
-   >>> sorted(t.as_native().iteritems()) # we 'sort' the dictionary to make easy the testing
+   >>> sorted(t.as_native().items()) # we 'sort' the dictionary to make easy the testing
    [('a', 'b'), ('c', 'd')]
-   >>> print t
+   >>> print(t)
    {'a': 'b', 'c': 'd'}
 
 
@@ -141,7 +141,7 @@ in the dictionary and its value will be the list of the original values.
    13
    >>> t.as_native()
    {'a': ['b', 'd']}
-   >>> print t
+   >>> print(t)
    {'a': ['b', 'd']}
 
 Of course, wrong inputs are catched
@@ -150,38 +150,38 @@ Of course, wrong inputs are catched
 
    >>> l = List()
 
-   >>> l.parse(r'["x"', 0)                               #doctest: +ELLIPSIS
+   >>> l.parse(r'["x"', 0)                               #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    ParsingError: End of input found without close the list. Expecting a ']'...
 
-   >>> l.parse(r'"xxx"]', 0)                             #doctest: +ELLIPSIS
+   >>> l.parse(r'"xxx"]', 0)                             #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    ParsingError: Wrong begin. Expected a '['...
    
 ::
    >>> t = Tuple()
 
-   >>> t.parse(r'{x', 0)                             #doctest: +ELLIPSIS
+   >>> t.parse(r'{x', 0)                             #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    ParsingError: Token '=' not found...
 
-   >>> t.parse(r'{x=', 0)                             #doctest: +ELLIPSIS
+   >>> t.parse(r'{x=', 0)                             #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    ParsingError: End of input...
 
-   >>> t.parse(r'{x=}', 0)                             #doctest: +ELLIPSIS
+   >>> t.parse(r'{x=}', 0)                             #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    UnexpectedToken: Unexpected token '}'...
 
-   >>> t.parse(r'{=xx}', 0)                             #doctest: +ELLIPSIS
+   >>> t.parse(r'{=xx}', 0)                             #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    UnexpectedToken: Unexpected token 'x'...
 
-   >>> t.parse(r'{xx}', 0)                             #doctest: +ELLIPSIS
+   >>> t.parse(r'{xx}', 0)                             #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    ParsingError: Token '=' not found...
 
-   >>> t.parse(r'xx}', 0)                             #doctest: +ELLIPSIS
+   >>> t.parse(r'xx}', 0)                             #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    ParsingError: Wrong begin. Expected a '{'...
 
@@ -214,7 +214,7 @@ can be a c-string, a list or a tuple, endig the list with a newline.
    >>> record = r.as_native()
    >>> record.klass, record.type, record.results
    ('baz', 'Notify', {'a': [], 'b': {'c': 'd'}})
-   >>> print record                          #doctest: +NORMALIZE_WHITESPACE
+   >>> print(record)                          #doctest: +NORMALIZE_WHITESPACE
    {'klass': 'baz', 
     'results': {'a': [], 'b': {'c': 'd'}}, 
     'token': None, 
@@ -240,7 +240,7 @@ The other top level construction are the Stream. These are unstructured c-string
    >>> stream = s.as_native()
    >>> stream.type, stream.stream
    ('Console', 'foo')
-   >>> print stream
+   >>> print(stream)
    {'stream': 'foo', 'type': 'Console'}
 
    >>> s.parse('@"bar"\n', 0)
@@ -248,7 +248,7 @@ The other top level construction are the Stream. These are unstructured c-string
    >>> stream = s.as_native()
    >>> stream.type, stream.stream
    ('Target', 'bar')
-   >>> print stream
+   >>> print(stream)
    {'stream': 'bar', 'type': 'Target'}
 
    >>> s.parse('&"baz"\n', 0)
@@ -256,7 +256,7 @@ The other top level construction are the Stream. These are unstructured c-string
    >>> stream = s.as_native()
    >>> stream.type, stream.stream
    ('Log', 'baz')
-   >>> print stream
+   >>> print(stream)
    {'stream': 'baz', 'type': 'Log'}
 
 Finally, the messages returned by GDB are a sequence (may be empty) of asynchronious 
@@ -277,7 +277,7 @@ each asynchronious message / stream / result separately.
    >>> stream = o.parse_line(text)
    >>> stream.type, stream.stream
    ('Console', 'foo')
-   >>> print stream
+   >>> print(stream)
    {'stream': 'foo', 'type': 'Console'}
 
 
@@ -337,7 +337,7 @@ Or, when a execution is stopped
    5
    >>> record.results['reason'], record.results['disp'], record.results['bkptno'], record.results['thread-id']
    ('breakpoint-hit', 'keep', '1', '0')
-   >>> print record                       #doctest: +NORMALIZE_WHITESPACE
+   >>> print(record)                       #doctest: +NORMALIZE_WHITESPACE
    {'klass': 'stopped',
    'results': {'bkptno': '1',
                'disp': 'keep',
