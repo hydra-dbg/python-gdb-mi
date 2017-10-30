@@ -91,6 +91,7 @@ composition of Python's dicts and lists.
 
 ### Streams
 
+```python
 >>> from gdb_mi import Stream
 
 >>> text = '~"GDB rocks!"\n'
@@ -180,7 +181,7 @@ If you do not redirect the target's output nor send it to a new console running
 the GDB `set new-console on` command, the output of the target will interfere an
 confuse the parser.
 
-Unfortunately there is not anything that we can do. Even if we ignore the message
+Unfortunately there is nothing that we can do. Even if we ignore the message
 we cannot be sure when a message is safe to be discarded.
 
 For example, the following C code generates an ambiguous output:
