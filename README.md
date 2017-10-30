@@ -77,22 +77,67 @@ doing some buffering. Use `parse` instead of `parse_line` to feed `Output`:
 
 ## Parsing Results
 
-Four types of objects can be returned by `parse_line` and `parse`:
+Three types of objects can be returned by `parse_line` and `parse`:
 
-  `StreamRecord`    that represents an [output record](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Stream-Records.html#GDB_002fMI-Stream-Records) from: the console, 
-                    the target and the log.
-  `ResultRecord`    that represents a synchronous response or [result record](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Result-Records.html#GDB_002fMI-Result-Records).
-  `AsyncRecord`     that represents an out of band [asynchronous record](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Async-Records.html#GDB_002fMI-Async-Records), 
-                    used to notify of changes that have happen.
-  `(gdb)`           a literal string that represents an empty prompt line.
+ - `Stream`    that represents an [output record](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Stream-Records.html#GDB_002fMI-Stream-Records) from: the console, 
+               the target and the log.
+ - `Record`    that represents or a synchronous [result record](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Result-Records.html#GDB_002fMI-Result-Records) and
+               or an out of band [asynchronous record](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Async-Records.html#GDB_002fMI-Async-Records), 
+               used to notify of changes that have happen.
+ - `(gdb)`     a literal string that represents an empty prompt line.
 
-We have already seen an example of a `ResultRecord`. Here are two more examples
-of `StreamRecord` and `AsyncRecord`:
+Both, `Stream` and `Record` have a `as_native` method to transform them into a
+composition of Python's dicts and lists.
+
+### Streams
+
+>>> from gdb_mi import Stream
+
+>>> text = '~"GDB rocks!"\n'
+>>> stream = out.parse_line(text)
+>>> stream      # same as pprint.pprint(stream.as_native())
+{'stream': 'GDB rocks!', 'type': 'Console'}
+
+>>> isinstance(stream, Stream)
+True
+
+```
+
+The `type` attribute is [one of the following](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Output-Syntax.html#GDB_002fMI-Output-Syntax),
+from the GDB MI's documentation:
+ - `Console`: output that should be displayed as is in the console. 
+              It is the textual response to a CLI command.
+ - `Target`: output produced by the target program.
+ - `Log`: output text coming from GDB’s internals, for instance messages that 
+          should be displayed as part of an error log.
+
+### Records
+
+We have already seen an example of a `Record`, in that case it was a synchronous
+`result record`:
+
+```python
+>>> from gdb_mi import Record
+
+>>> isinstance(record, Record)
+True
+
+>>> record.klass, record.type
+('done', 'Sync')
+
+```
+
+The `klass` attribute is [one of the following](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Result-Records.html#GDB_002fMI-Result-Records): `done`, `running`, `connected`,
+`error` or `exit`.
+
+The `type` attribute is `Sync` for a `synchronous result record`.
+
+Here are an example of an `asynchronous record`:
 
 ```python
 >>> text = '*stopped,reason="breakpoint-hit",disp="keep",bkptno="1",thread-id="0",frame={addr="0x08048564",func="main",args=[{name="argc",value="1"},{name="argv",value="0xbfc4d4d4"}],file="myprog.c",fullname="/home/nickrob/myprog.c",line="68"}\n'
->>> async = out.parse_line(text)
->>> async                                 #doctest: +NORMALIZE_WHITESPACE
+>>> record = out.parse_line(text)
+>>> record                                #doctest: +NORMALIZE_WHITESPACE
 {'klass': 'stopped',
   'results': {'bkptno': '1',
               'disp': 'keep',
@@ -108,26 +153,27 @@ of `StreamRecord` and `AsyncRecord`:
   'token': None,
   'type': 'Exec'}
 
->>> text = '~"GDB rocks!"\n'
->>> stream = out.parse_line(text)
->>> stream
-{'stream': 'GDB rocks!', 'type': 'Console'}
-
-```
-   
-Any object can be then transformed to a simple combination of dict and lists
-with the `as_native` method. This makes easier the serialization to JSON or any
-other text representation:
-
-```python
->>> s = stream.as_native()
->>> isinstance(s, dict)
+>>> isinstance(record, Record)
 True
 
->>> s['stream'], s['type']
-('GDB rocks!', 'Console')
+>>> record.klass, record.type
+('stopped', 'Exec')
 
 ```
+
+For an `asynchronous record`, the attribute `type` is [one of the following](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Output-Syntax.html#GDB_002fMI-Output-Syntax) for `AsyncRecord`s:
+`Exec`, `Status` or `Notify`.
+
+From the GDB MI's documentation:
+ - `Exec`: asynchronous state change on the target (stopped, started, disappeared).
+ - `Status`: on-going status information about the progress of a slow operation. It can be discarded.
+ - `Notify`: supplementary information that the client should handle (e.g., a new breakpoint information).
+
+
+Both kind of records, synchronous and asynchronous, have two additional attributes:
+ - `token`: used by GDB to match the request and the response.
+ - `results`: the data contained in the message, it will depend of the GDB message.
+
 
 ## Install
 
