@@ -7,7 +7,9 @@ This bug makes an incorrect output when multiple breakpoints are in the same
 location: each breakpoint's data is glued together in a non-conforming MI syntax.
 
 This issue affects the result (synchronous), the asynchronous records and it even
-affects the results of a `Breakpoint Table`_::
+affects the results of a `Breakpoint Table`_:
+
+.. code:: python
 
   # =breakpoint-modified,bkpt={...
   # ^done,bkpt={...
@@ -15,7 +17,9 @@ affects the results of a `Breakpoint Table`_::
 
 The proposed solution is to replace this by a simple list.
 
-Notice how we also changed the expected keyword `bkpt` by `bkpts`::
+Notice how we also changed the expected keyword ``bkpt`` by ``bkpts``:
+
+.. code:: python
 
    >>> text = '=breakpoint-modified,bkpt={number="1",type="breakpoint",disp="keep",enabled="y",addr="<MULTIPLE>",times="1",original-location="roll"},{number="1.1",enabled="y",addr="0x08048563",func="roll",file="two_pthreads.c",fullname="/threads/two_pthreads.c",line="5",thread-groups=["i1"]},{number="1.2",enabled="y",addr="0x08048563",func="roll",file="two_pthreads.c",fullname="/threads/two_pthreads.c",line="5",thread-groups=["i2"]}\n'
 
@@ -57,7 +61,9 @@ Notice how we also changed the expected keyword `bkpt` by `bkpts`::
     'type': 'Notify'}
 
 To make this behavior uniform we apply the same change even if there is only
-one breakpoint::
+one breakpoint:
+
+.. code:: python
 
    >>> text = '^done,bkpt={number="1",type="breakpoint",disp="keep",enabled="y",addr="0x08048564",func="main",file="myprog.c",fullname="/home/nickrob/myprog.c",line="68",thread-groups=["i1"],times="0"}\n'
    >>> record = o.parse_line(text)
@@ -93,11 +99,13 @@ one breakpoint::
     'token': None,
     'type': 'Sync'}
 
-Due the same bug, we need to modify the event `BreakpointTable` which lists the 
+Due the same bug, we need to modify the event ``BreakpointTable`` which lists the
 breakpoints and if some of them are in the same address, this will trigger the
 same bug.
 
-Here is the fix::
+Here is the fix:
+
+.. code:: python
 
    >>> text = '^done,BreakpointTable={nr_rows="3",nr_cols="6",hdr=[{width="7",alignment="-1",col_name="number",colhdr="Num"},{width="14",alignment="-1",col_name="type",colhdr="Type"},{width="4",alignment="-1",col_name="disp",colhdr="Disp"},{width="3",alignment="-1",col_name="enabled",colhdr="Enb"},{width="18",alignment="-1",col_name="addr",colhdr="Address"},{width="40",alignment="2",col_name="what",colhdr="What"}],body=[bkpt={number="1",type="breakpoint",disp="keep",enabled="y",addr="<MULTIPLE>",times="0",original-location="roll"},{number="1.1",enabled="y",addr="0x00000000004006a9",func="roll",file="three_pthreads.c",fullname="/threads/three_pthreads.c",line="5",thread-groups=["i1"]},{number="1.2",enabled="y",addr="0x00000000004006a9",func="roll",file="three_pthreads.c",fullname="/threads/three_pthreads.c",line="5",thread-groups=["i2"]},bkpt={number="2",type="breakpoint",disp="keep",enabled="y",addr="<MULTIPLE>",times="0",original-location="roll"},{number="2.1",enabled="y",addr="0x00000000004006a9",func="roll",file="three_pthreads.c",fullname="/threads/three_pthreads.c",line="5",thread-groups=["i1"]},{number="2.2",enabled="y",addr="0x00000000004006a9",func="roll",file="three_pthreads.c",fullname="/threads/three_pthreads.c",line="5",thread-groups=["i2"]},bkpt={number="3",type="breakpoint",disp="keep",enabled="y",addr="<MULTIPLE>",times="0",original-location="roll"},{number="3.1",enabled="y",addr="0x00000000004006a9",func="roll",file="three_pthreads.c",fullname="/threads/three_pthreads.c",line="5",thread-groups=["i1"]},{number="3.2",enabled="y",addr="0x00000000004006a9",func="roll",file="three_pthreads.c",fullname="/threads/three_pthreads.c",line="5",thread-groups=["i2"]}]}\n'
    

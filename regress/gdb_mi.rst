@@ -8,9 +8,11 @@ C-Strings
 ---------
 
 The most basic elements are the `c-strings`_. As all the objects that can be found in
-`python-gdb-mi`, the c-string objects support parse a raw string and transform it
-into a python-native object::
+``python-gdb-mi``, the c-string objects support parse a raw string and transform it
+into a python-native object:
  
+.. code:: python
+
    >>> import pprint
    >>> from gdb_mi import *
    >>> 
@@ -22,11 +24,11 @@ into a python-native object::
    >>> print(s)
    'fooo'
 
-The `parse` method takes two arguments, the full raw string and the offset where
+The ``parse`` method takes two arguments, the full raw string and the offset where
 to start read from it and parse it and the result of this method is the updated 
 offset.
 
-After the correct parsing, the `as_native` method will return the simple python 
+After the correct parsing, the ``as_native`` method will return the simple python 
 objects representing the data parsed using strings, numbers, lists and 
 dictionaries which they are perfect for serialization as JSON or other text formats.
 
@@ -35,8 +37,10 @@ In the case of the c-string, the returned native object is, of course, a string.
 Note that the c-string expect as a valid input a string like in C, starting with double
 quote.
 
-Any incorrect input will raise an exception::
+Any incorrect input will raise an exception:
    
+.. code:: python
+
    >>> s.parse('xxx', 0)                     #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    ParsingError: Wrong begin. Expected a double quote '"'...
@@ -45,8 +49,10 @@ Any incorrect input will raise an exception::
    Traceback (most recent call last):
    ParsingError: End of input found without close the c-string. Expecting a '"'...
 
-The c-string support any valid string with the correct escape sequences::
-   
+The c-string support any valid string with the correct escape sequences:
+
+.. code:: python
+
    >>> s.parse('""', 0)
    2
    >>> s.as_native()
@@ -74,7 +80,9 @@ Lists
 -----
 
 Represent an ordered sequence of items or `list`_. In python they are represented as
-naive lists::
+naive lists:
+
+.. code:: python
 
    >>> l = List()
    >>> l.parse(r'[]', 0)
@@ -109,9 +117,11 @@ naive lists::
 Tuples (aka Python's dicts)
 ---------------------------
 
-A GDB's `tuple`_ is a key-value mapping. `python-gdb-mi` will take these
-and it will transform them into native Python's dictionary::
-   
+A GDB's `tuple`_ is a key-value mapping. ``python-gdb-mi`` will take these
+and it will transform them into native Python's dictionary:
+ 
+.. code:: python
+
    >>> t = Tuple()
    >>> t.parse(r'{}', 0)
    2
@@ -149,7 +159,9 @@ and it will transform them into native Python's dictionary::
 The ugly part of the tuples are the possibility of repeated keys.
 
 In that case, the set of values with the same key are merged into a single entry
-in the dictionary and its value will be the list of the original values::
+in the dictionary and its value will be the list of the original values:
+
+.. code:: python
 
    >>> t = Tuple()
    >>> t.parse(r'{a="b",a="d"}', 0)
@@ -157,7 +169,9 @@ in the dictionary and its value will be the list of the original values::
    >>> t
    {'a': ['b', 'd']}
 
-Of course, wrong inputs are caught::
+Of course, wrong inputs are caught:
+
+.. code:: python
 
    >>> t.parse(r'{x', 0)                     #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
@@ -188,7 +202,9 @@ Asynchronous Records
 --------------------
 
 The `asynchronious records`_ are emitted by GDB to notify about changes that
-happen like a breakpoint hit::
+happen like a breakpoint hit:
+
+.. code:: python
 
    >>> r = AsyncRecord()
    >>> r.parse('*foo\n', 0)
@@ -212,7 +228,9 @@ happen like a breakpoint hit::
 Result Records (Sync)
 ---------------------
 
-Synchronous `result records`_ of a GDB command::
+Synchronous `result records`_ of a GDB command:
+
+.. code:: python
 
    >>> r = ResultRecord()
    >>> r.parse('^bar,a="b"\n', 0)
@@ -224,9 +242,10 @@ Stream Records
 --------------
 
 The other top level construction are the Stream. These are unstructured c-strings
-named `stream records`_::
+named `stream records`_:
 
-::
+.. code:: python
+
    >>> s = StreamRecord()
    >>> s.parse('~"foo"\n', 0)
    6
@@ -250,10 +269,12 @@ Finally, the messages returned by GDB are a sequence (may be empty) of asynchron
 messages and streams, followed by an optional result record. Then, the special token
 '(gdb)' should be found, followed by a newline.
 
-Instead of delivery these sequence of messages in one shot, the `Output` parser 
+Instead of delivery these sequence of messages in one shot, the ``Output`` parser
 will deliver each asynchronous message / stream / result separately.
 
-Call `parse_line` to parse a full GDB MI message to retrieve the parsed object::
+Call ``parse_line`` to parse a full GDB MI message to retrieve the parsed object:
+
+.. code:: python
 
    >>> o = Output()
    
@@ -266,8 +287,10 @@ Call `parse_line` to parse a full GDB MI message to retrieve the parsed object::
    >>> print(stream)
    {'stream': 'foo', 'type': 'Console'}
 
-Call `parse` to feed the parser with a partial GDB MI message. If enough data is given,
-it will return the parsed object like parse_line. If not, it will return None::
+Call ``parse`` to feed the parser with a partial GDB MI message. If enough data is given,
+it will return the parsed object like parse_line. If not, it will return None:
+
+.. code:: python
 
    >>> text = '~"bar"\n'
    >>> o.parse(text[:3])  # incomplete, return None
@@ -277,7 +300,9 @@ it will return the parsed object like parse_line. If not, it will return None::
    {'stream': 'bar', 'type': 'Console'}
 
 
-As an example, this is the message when a execution is stopped::
+As an example, this is the message when a execution is stopped:
+
+.. code:: python
 
    >>> o = Output()
 
@@ -314,7 +339,6 @@ As an example, this is the message when a execution is stopped::
    ('argc', '1')
    >>> main_args[1]['name'], main_args[1]['value']
    ('argv', '0xbfc4d4d4')
-
 
 
 .. _Machine Interface: https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI.html
