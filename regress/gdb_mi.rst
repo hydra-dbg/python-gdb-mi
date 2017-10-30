@@ -1,9 +1,15 @@
-The output of the GDB Machine Interface is compound of small elements
-The most basic are the c-strings. As all the objects that can be found in
-gdb_mi, the c-string objects support parse a raw string and transform it
-into a python-native object.
+Python GDB MI Parser: objects
+=============================
 
-::
+The following doctests shows the different `Machine Inteface`_ objects that
+GDB can write to its output in a line, text based way.
+
+C-Strings
+---------
+
+The most basic elements are the `c-strings`_. As all the objects that can be found in
+`python-gdb-mi`, the c-string objects support parse a raw string and transform it
+into a python-native object::
  
    >>> import pprint
    >>> from gdb_mi import *
@@ -16,32 +22,30 @@ into a python-native object.
    >>> print(s)
    'fooo'
 
-The *parse* method take two arguments, the full raw string and the offset where
-to start read from it and parse it.
-The result of this method is the updated offset.
-After the correct parsing, the as_native method will return the simple python objects
-representing the data parsed.
+The `parse` method takes two arguments, the full raw string and the offset where
+to start read from it and parse it and the result of this method is the updated 
+offset.
+
+After the correct parsing, the `as_native` method will return the simple python 
+objects representing the data parsed using strings, numbers, lists and 
+dictionaries which they are perfect for serialization as JSON or other text formats.
 
 In the case of the c-string, the returned native object is, of course, a string.
 
 Note that the c-string expect as a valid input a string like in C, starting with double
 quote.
 
-Any incorrect input will raise an exception
-
-::
+Any incorrect input will raise an exception::
    
-   >>> s.parse('xxx', 0)                                 #doctest: +IGNORE_EXCEPTION_DETAIL
+   >>> s.parse('xxx', 0)                     #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    ParsingError: Wrong begin. Expected a double quote '"'...
    
-   >>> s.parse('"f...', 0)                               #doctest: +IGNORE_EXCEPTION_DETAIL
+   >>> s.parse('"f...', 0)                   #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    ParsingError: End of input found without close the c-string. Expecting a '"'...
 
-The c-string support any valid string with the correct escape sequences
-
-::
+The c-string support any valid string with the correct escape sequences::
    
    >>> s.parse('""', 0)
    2
@@ -63,210 +67,194 @@ The c-string support any valid string with the correct escape sequences
    >>> s.as_native()
    '\\ \n'
 
-With the c-string implemented, more complex objects can be built like lists or tuples (dicts)
+With the c-string implemented, more complex objects can be built like lists or 
+tuples (python's dicts)
 
-::
+Lists
+-----
+
+Represent an ordered sequence of items or `list`_. In python they are represented as
+naive lists::
 
    >>> l = List()
    >>> l.parse(r'[]', 0)
    2
    >>> l.as_native()
    []
-   >>> print(l)
+   >>> print(l) # same as pprint.pprint(l.as_native())
    []
 
    >>> l.parse(r'["a"]', 0)
    5
    >>> l.as_native()
    ['a']
-   >>> print(l)
+   >>> l        # same as print(l)
    ['a']
 
    >>> l.parse(r'["a","b"]', 0)
    9
    >>> l.as_native()
    ['a', 'b']
-   >>> print(l)
+   >>> l
    ['a', 'b']
+   
+   >>> l.parse(r'["x"', 0)                   #doctest: +IGNORE_EXCEPTION_DETAIL
+   Traceback (most recent call last):
+   ParsingError: End of input found without close the list. Expecting a ']'...
 
-::
+   >>> l.parse(r'"xxx"]', 0)                 #doctest: +IGNORE_EXCEPTION_DETAIL
+   Traceback (most recent call last):
+   ParsingError: Wrong begin. Expected a '['...
+
+Tuples (aka Python's dicts)
+---------------------------
+
+A GDB's `tuple`_ is a key-value mapping. `python-gdb-mi` will take these
+and it will transform them into native Python's dictionary::
    
    >>> t = Tuple()
    >>> t.parse(r'{}', 0)
    2
    >>> t.as_native()
    {}
-   >>> print(t)
+   >>> t
    {}
 
    >>> t.parse(r'{a="b"}', 0)
    7
-   >>> t.as_native()
-   {'a': 'b'}
-   >>> print(t)
+   >>> t  # same as pprint.pprint(t.as_native())
    {'a': 'b'}
 
    >>> t.parse(r'{a=[]}', 0)
    6
-   >>> t.as_native()
+   >>> t
    {'a': []}
 
    >>> t.parse(r'{a=["a","b"]}', 0)
    13
-   >>> t.as_native()
+   >>> t
    {'a': ['a', 'b']}
 
    >>> t.parse(r'{a={b="c"}}', 0)
    11
-   >>> t.as_native()
-   {'a': {'b': 'c'}}
-   >>> print(t)
+   >>> t
    {'a': {'b': 'c'}}
 
    >>> t.parse(r'{a="b",c="d"}', 0)
    13
-   >>> sorted(t.as_native().items()) # we 'sort' the dictionary to make easy the testing
-   [('a', 'b'), ('c', 'd')]
-   >>> print(t)
+   >>> t
    {'a': 'b', 'c': 'd'}
 
 
 The ugly part of the tuples are the possibility of repeated keys.
-In that case, the set of values with the same key are merged into a single entry 
-in the dictionary and its value will be the list of the original values.
 
-::
+In that case, the set of values with the same key are merged into a single entry
+in the dictionary and its value will be the list of the original values::
+
    >>> t = Tuple()
    >>> t.parse(r'{a="b",a="d"}', 0)
    13
-   >>> t.as_native()
-   {'a': ['b', 'd']}
-   >>> print(t)
+   >>> t
    {'a': ['b', 'd']}
 
-Of course, wrong inputs are catched
+Of course, wrong inputs are caught::
 
-::
-
-   >>> l = List()
-
-   >>> l.parse(r'["x"', 0)                               #doctest: +IGNORE_EXCEPTION_DETAIL
-   Traceback (most recent call last):
-   ParsingError: End of input found without close the list. Expecting a ']'...
-
-   >>> l.parse(r'"xxx"]', 0)                             #doctest: +IGNORE_EXCEPTION_DETAIL
-   Traceback (most recent call last):
-   ParsingError: Wrong begin. Expected a '['...
-   
-::
-   >>> t = Tuple()
-
-   >>> t.parse(r'{x', 0)                             #doctest: +IGNORE_EXCEPTION_DETAIL
+   >>> t.parse(r'{x', 0)                     #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    ParsingError: Token '=' not found...
 
-   >>> t.parse(r'{x=', 0)                             #doctest: +IGNORE_EXCEPTION_DETAIL
+   >>> t.parse(r'{x=', 0)                    #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    ParsingError: End of input...
 
-   >>> t.parse(r'{x=}', 0)                             #doctest: +IGNORE_EXCEPTION_DETAIL
+   >>> t.parse(r'{x=}', 0)                   #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    UnexpectedToken: Unexpected token '}'...
 
-   >>> t.parse(r'{=xx}', 0)                             #doctest: +IGNORE_EXCEPTION_DETAIL
+   >>> t.parse(r'{=xx}', 0)                  #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    UnexpectedToken: Unexpected token 'x'...
 
-   >>> t.parse(r'{xx}', 0)                             #doctest: +IGNORE_EXCEPTION_DETAIL
+   >>> t.parse(r'{xx}', 0)                   #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    ParsingError: Token '=' not found...
 
-   >>> t.parse(r'xx}', 0)                             #doctest: +IGNORE_EXCEPTION_DETAIL
+   >>> t.parse(r'xx}', 0)                    #doctest: +IGNORE_EXCEPTION_DETAIL
    Traceback (most recent call last):
    ParsingError: Wrong begin. Expected a '{'...
 
-At the top most of the construction, the structured messages returned by GDB are 
-AsyncRecords and ResultRecord.
-Both are a named list (possibly empty) of key-value pairs where each value 
-can be a c-string, a list or a tuple, endig the list with a newline.
 
-::
+Asynchronous Records
+--------------------
+
+The `asynchronious records`_ are emitted by GDB to notify about changes that
+happen like a breakpoint hit::
 
    >>> r = AsyncRecord()
    >>> r.parse('*foo\n', 0)
    4
-   >>> record = r.as_native()
-   >>> record.klass, record.type, record.results
-   ('foo', 'Exec', {})
-   >>> record
+   >>> r    # again, this is the same as pprint.pprint(r.as_native())
    {'klass': 'foo', 'results': {}, 'token': None, 'type': 'Exec'}
 
    >>> r.parse('+bar,a="b"\n', 0)
    10
-   >>> record = r.as_native()
-   >>> record.klass, record.type, record.results
-   ('bar', 'Status', {'a': 'b'})
-   >>> record
+   >>> r
    {'klass': 'bar', 'results': {'a': 'b'}, 'token': None, 'type': 'Status'}
 
    >>> r.parse('=baz,a=[],b={c="d"}\n', 0)
    19
-   >>> record = r.as_native()
-   >>> record.klass, record.type, record.results
-   ('baz', 'Notify', {'a': [], 'b': {'c': 'd'}})
-   >>> print(record)                          #doctest: +NORMALIZE_WHITESPACE
+   >>> r                                     #doctest: +NORMALIZE_WHITESPACE
    {'klass': 'baz', 
     'results': {'a': [], 'b': {'c': 'd'}}, 
     'token': None, 
     'type': 'Notify'}
    
-::
+Result Records (Sync)
+---------------------
+
+Synchronous `result records`_ of a GDB command::
 
    >>> r = ResultRecord()
    >>> r.parse('^bar,a="b"\n', 0)
    10
-   >>> record = r.as_native()
-   >>> record.klass, record.type, record.results
-   ('bar', 'Sync', {'a': 'b'})
-   >>> record
+   >>> r
    {'klass': 'bar', 'results': {'a': 'b'}, 'token': None, 'type': 'Sync'}
 
-The other top level construction are the Stream. These are unstructured c-strings.
+Stream Records
+--------------
+
+The other top level construction are the Stream. These are unstructured c-strings
+named `stream records`_::
 
 ::
    >>> s = StreamRecord()
    >>> s.parse('~"foo"\n', 0)
    6
-   >>> stream = s.as_native()
-   >>> stream.type, stream.stream
-   ('Console', 'foo')
-   >>> print(stream)
+   >>> s
    {'stream': 'foo', 'type': 'Console'}
 
    >>> s.parse('@"bar"\n', 0)
    6
-   >>> stream = s.as_native()
-   >>> stream.type, stream.stream
-   ('Target', 'bar')
-   >>> print(stream)
+   >>> s
    {'stream': 'bar', 'type': 'Target'}
 
    >>> s.parse('&"baz"\n', 0)
    6
-   >>> stream = s.as_native()
-   >>> stream.type, stream.stream
-   ('Log', 'baz')
-   >>> print(stream)
+   >>> s # again, this is a shortcut for pprint.pprint(s.as_native())
    {'stream': 'baz', 'type': 'Log'}
 
-Finally, the messages returned by GDB are a sequence (may be empty) of asynchronious 
+Output
+------
+
+Finally, the messages returned by GDB are a sequence (may be empty) of asynchronous 
 messages and streams, followed by an optional result record. Then, the special token
 '(gdb)' should be found, followed by a newline.
 
-Instead of delivery these big messages one by one, the Output parser will deliver
-each asynchronious message / stream / result separately.
+Instead of delivery these sequence of messages in one shot, the `Output` parser 
+will deliver each asynchronous message / stream / result separately.
 
-::
+Call `parse_line` to parse a full GDB MI message to retrieve the parsed object::
+
    >>> o = Output()
    
    >>> text = '(gdb) \n'  #the extra space is not specified in GDB's docs but it's necessary
@@ -275,58 +263,22 @@ each asynchronious message / stream / result separately.
 
    >>> text = '~"foo"\n'
    >>> stream = o.parse_line(text)
-   >>> stream.type, stream.stream
-   ('Console', 'foo')
    >>> print(stream)
    {'stream': 'foo', 'type': 'Console'}
 
+Call `parse` to feed the parser with a partial GDB MI message. If enough data is given,
+it will return the parsed object like parse_line. If not, it will return None::
 
-As an example, this is the message after setting a breakpoint
+   >>> text = '~"bar"\n'
+   >>> o.parse(text[:3])  # incomplete, return None
 
-Workaround: handle the GDB's bug https://sourceware.org/bugzilla/show_bug.cgi?id=14733
-We change the bkpt= by bkpts=, from a tuple/dict to a list of them.
-
-::
-   >>> o = Output()
-
-   >>> text = '^done,bkpt={number="1",type="breakpoint",disp="keep",enabled="y",addr="0x08048564",func="main",file="myprog.c",fullname="/home/nickrob/myprog.c",line="68",thread-groups=["i1"],times="0"}\n'
-   >>> record = o.parse_line(text)
-   >>> record.klass, record.type
-   ('done', 'Sync')
-   >>> len(record.results)
-   1
-   >>> pprint.pprint(record.results['bkpts'][0])       #doctest: +NORMALIZE_WHITESPACE
-   {'addr': '0x08048564',
-   'disp': 'keep',
-   'enabled': 'y',
-   'file': 'myprog.c',
-   'fullname': '/home/nickrob/myprog.c',
-   'func': 'main',
-   'line': '68',
-   'number': '1',
-   'thread-groups': ['i1'],
-   'times': '0',
-   'type': 'breakpoint'}
-   >>> record                          #doctest: +NORMALIZE_WHITESPACE
-   {'klass': 'done',
-    'results': {'bkpts': [{'addr': '0x08048564',
-                           'disp': 'keep',
-                           'enabled': 'y',
-                           'file': 'myprog.c',
-                           'fullname': '/home/nickrob/myprog.c',
-                           'func': 'main',
-                           'line': '68',
-                           'number': '1',
-                           'thread-groups': ['i1'],
-                           'times': '0',
-                           'type': 'breakpoint'}]},
-    'token': None,
-    'type': 'Sync'}
+   >>> stream = o.parse(text[3:])  # feed the rest of the message, return the parsed object
+   >>> print(stream)
+   {'stream': 'bar', 'type': 'Console'}
 
 
-Or, when a execution is stopped
+As an example, this is the message when a execution is stopped::
 
-::
    >>> o = Output()
 
    >>> text = '*stopped,reason="breakpoint-hit",disp="keep",bkptno="1",thread-id="0",frame={addr="0x08048564",func="main",args=[{name="argc",value="1"},{name="argv",value="0xbfc4d4d4"}],file="myprog.c",fullname="/home/nickrob/myprog.c",line="68"}\n'
@@ -337,7 +289,7 @@ Or, when a execution is stopped
    5
    >>> record.results['reason'], record.results['disp'], record.results['bkptno'], record.results['thread-id']
    ('breakpoint-hit', 'keep', '1', '0')
-   >>> print(record)                       #doctest: +NORMALIZE_WHITESPACE
+   >>> print(record)                         #doctest: +NORMALIZE_WHITESPACE
    {'klass': 'stopped',
    'results': {'bkptno': '1',
                'disp': 'keep',
@@ -364,152 +316,11 @@ Or, when a execution is stopped
    ('argv', '0xbfc4d4d4')
 
 
-Workaround: handle the GDB's bug https://sourceware.org/bugzilla/show_bug.cgi?id=14733
-We change the bkpt= by bkpts=, from a tuple/dict to a list of them. In order to keep consistent names,
-we change the event's name breakpoint-modified to breakpoints-modified
 
-::
-   >>> text = '=breakpoint-modified,bkpt={number="1",type="breakpoint",disp="keep",enabled="y",addr="<MULTIPLE>",times="1",original-location="roll"},{number="1.1",enabled="y",addr="0x08048563",func="roll",file="two_pthreads.c",fullname="/threads/two_pthreads.c",line="5",thread-groups=["i1"]},{number="1.2",enabled="y",addr="0x08048563",func="roll",file="two_pthreads.c",fullname="/threads/two_pthreads.c",line="5",thread-groups=["i2"]}\n'
-
-   >>> record = o.parse_line(text)
-   >>> record.klass, record.type
-   ('breakpoints-modified', 'Notify')
-
-   >>> record
-   {'klass': 'breakpoints-modified',
-    'results': {'bkpts': [{'addr': '<MULTIPLE>',
-                           'disp': 'keep',
-                           'enabled': 'y',
-                           'number': '1',
-                           'original-location': 'roll',
-                           'times': '1',
-                           'type': 'breakpoint'},
-                          {'addr': '0x08048563',
-                           'enabled': 'y',
-                           'file': 'two_pthreads.c',
-                           'fullname': '/threads/two_pthreads.c',
-                           'func': 'roll',
-                           'line': '5',
-                           'number': '1.1',
-                           'thread-groups': ['i1']},
-                          {'addr': '0x08048563',
-                           'enabled': 'y',
-                           'file': 'two_pthreads.c',
-                           'fullname': '/threads/two_pthreads.c',
-                           'func': 'roll',
-                           'line': '5',
-                           'number': '1.2',
-                           'thread-groups': ['i2']}]},
-    'token': None,
-    'type': 'Notify'}
-
-
-Due the same bug, we need to modify the event BreakpointTable which lists the breakpoints and if some of them are in
-the same address, this will trigger the same bug.
-Here is the fix:
-
-::
-
-   >>> text = '^done,BreakpointTable={nr_rows="3",nr_cols="6",hdr=[{width="7",alignment="-1",col_name="number",colhdr="Num"},{width="14",alignment="-1",col_name="type",colhdr="Type"},{width="4",alignment="-1",col_name="disp",colhdr="Disp"},{width="3",alignment="-1",col_name="enabled",colhdr="Enb"},{width="18",alignment="-1",col_name="addr",colhdr="Address"},{width="40",alignment="2",col_name="what",colhdr="What"}],body=[bkpt={number="1",type="breakpoint",disp="keep",enabled="y",addr="<MULTIPLE>",times="0",original-location="roll"},{number="1.1",enabled="y",addr="0x00000000004006a9",func="roll",file="three_pthreads.c",fullname="/threads/three_pthreads.c",line="5",thread-groups=["i1"]},{number="1.2",enabled="y",addr="0x00000000004006a9",func="roll",file="three_pthreads.c",fullname="/threads/three_pthreads.c",line="5",thread-groups=["i2"]},bkpt={number="2",type="breakpoint",disp="keep",enabled="y",addr="<MULTIPLE>",times="0",original-location="roll"},{number="2.1",enabled="y",addr="0x00000000004006a9",func="roll",file="three_pthreads.c",fullname="/threads/three_pthreads.c",line="5",thread-groups=["i1"]},{number="2.2",enabled="y",addr="0x00000000004006a9",func="roll",file="three_pthreads.c",fullname="/threads/three_pthreads.c",line="5",thread-groups=["i2"]},bkpt={number="3",type="breakpoint",disp="keep",enabled="y",addr="<MULTIPLE>",times="0",original-location="roll"},{number="3.1",enabled="y",addr="0x00000000004006a9",func="roll",file="three_pthreads.c",fullname="/threads/three_pthreads.c",line="5",thread-groups=["i1"]},{number="3.2",enabled="y",addr="0x00000000004006a9",func="roll",file="three_pthreads.c",fullname="/threads/three_pthreads.c",line="5",thread-groups=["i2"]}]}\n'
-   
-   >>> record = o.parse_line(text)
-   >>> record
-   {'klass': 'done',
-    'results': {'BreakpointTable': {'body': [{'addr': '<MULTIPLE>',
-                                              'disp': 'keep',
-                                              'enabled': 'y',
-                                              'number': '1',
-                                              'original-location': 'roll',
-                                              'times': '0',
-                                              'type': 'breakpoint'},
-                                             {'addr': '0x00000000004006a9',
-                                              'enabled': 'y',
-                                              'file': 'three_pthreads.c',
-                                              'fullname': '/threads/three_pthreads.c',
-                                              'func': 'roll',
-                                              'line': '5',
-                                              'number': '1.1',
-                                              'thread-groups': ['i1']},
-                                             {'addr': '0x00000000004006a9',
-                                              'enabled': 'y',
-                                              'file': 'three_pthreads.c',
-                                              'fullname': '/threads/three_pthreads.c',
-                                              'func': 'roll',
-                                              'line': '5',
-                                              'number': '1.2',
-                                              'thread-groups': ['i2']},
-                                             {'addr': '<MULTIPLE>',
-                                              'disp': 'keep',
-                                              'enabled': 'y',
-                                              'number': '2',
-                                              'original-location': 'roll',
-                                              'times': '0',
-                                              'type': 'breakpoint'},
-                                             {'addr': '0x00000000004006a9',
-                                              'enabled': 'y',
-                                              'file': 'three_pthreads.c',
-                                              'fullname': '/threads/three_pthreads.c',
-                                              'func': 'roll',
-                                              'line': '5',
-                                              'number': '2.1',
-                                              'thread-groups': ['i1']},
-                                             {'addr': '0x00000000004006a9',
-                                              'enabled': 'y',
-                                              'file': 'three_pthreads.c',
-                                              'fullname': '/threads/three_pthreads.c',
-                                              'func': 'roll',
-                                              'line': '5',
-                                              'number': '2.2',
-                                              'thread-groups': ['i2']},
-                                             {'addr': '<MULTIPLE>',
-                                              'disp': 'keep',
-                                              'enabled': 'y',
-                                              'number': '3',
-                                              'original-location': 'roll',
-                                              'times': '0',
-                                              'type': 'breakpoint'},
-                                             {'addr': '0x00000000004006a9',
-                                              'enabled': 'y',
-                                              'file': 'three_pthreads.c',
-                                              'fullname': '/threads/three_pthreads.c',
-                                              'func': 'roll',
-                                              'line': '5',
-                                              'number': '3.1',
-                                              'thread-groups': ['i1']},
-                                             {'addr': '0x00000000004006a9',
-                                              'enabled': 'y',
-                                              'file': 'three_pthreads.c',
-                                              'fullname': '/threads/three_pthreads.c',
-                                              'func': 'roll',
-                                              'line': '5',
-                                              'number': '3.2',
-                                              'thread-groups': ['i2']}],
-                                    'hdr': [{'alignment': '-1',
-                                             'col_name': 'number',
-                                             'colhdr': 'Num',
-                                             'width': '7'},
-                                            {'alignment': '-1',
-                                             'col_name': 'type',
-                                             'colhdr': 'Type',
-                                             'width': '14'},
-                                            {'alignment': '-1',
-                                             'col_name': 'disp',
-                                             'colhdr': 'Disp',
-                                             'width': '4'},
-                                            {'alignment': '-1',
-                                             'col_name': 'enabled',
-                                             'colhdr': 'Enb',
-                                             'width': '3'},
-                                            {'alignment': '-1',
-                                             'col_name': 'addr',
-                                             'colhdr': 'Address',
-                                             'width': '18'},
-                                            {'alignment': '2',
-                                             'col_name': 'what',
-                                             'colhdr': 'What',
-                                             'width': '40'}],
-                                    'nr_cols': '6',
-                                    'nr_rows': '3'}},
-    'token': None,
-    'type': 'Sync'}
-
+.. _Machine Interface: https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI.html
+.. _c-strings: https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Input-Syntax.html#GDB_002fMI-Input-Syntax
+.. _list: https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Output-Syntax.html#GDB_002fMI-Output-Syntax
+.. _tuple: https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Output-Syntax.html#GDB_002fMI-Output-Syntax
+.. _stream records: https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Stream-Records.html#GDB_002fMI-Stream-Records
+.. _result records: https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Result-Records.html#GDB_002fMI-Result-Records
+.. _asynchronious records: https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Async-Records.html#GDB_002fMI-Async-Records
