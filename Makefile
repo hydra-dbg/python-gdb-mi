@@ -1,4 +1,4 @@
-.PHONY: all test dist
+.PHONY: all test dist upload
 
 all:
 	echo "Usage: make test|dist"
@@ -13,3 +13,5 @@ dist:
 	python setup.py sdist bdist_wheel --universal
 	rm -Rf build/ *.egg-info README.rst
 
+upload: dist
+	twine upload dist/*.tar.gz dist/*.whl
