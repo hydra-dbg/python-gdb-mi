@@ -135,7 +135,7 @@ The `type` attribute is `Sync` for a `synchronous result record`.
 Here are an example of an `asynchronous record`:
 
 ```python
->>> text = '*stopped,reason="breakpoint-hit",disp="keep",bkptno="1",thread-id="0",frame={addr="0x08048564",func="main",args=[{name="argc",value="1"},{name="argv",value="0xbfc4d4d4"}],file="myprog.c",fullname="/home/nickrob/myprog.c",line="68"}\n'
+>>> text = '42*stopped,reason="breakpoint-hit",disp="keep",bkptno="1",thread-id="0",frame={addr="0x08048564",func="main",args=[{name="argc",value="1"},{name="argv",value="0xbfc4d4d4"}],file="myprog.c",fullname="/home/nickrob/myprog.c",line="68"}\n'
 >>> record = out.parse_line(text)
 >>> record                                #doctest: +NORMALIZE_WHITESPACE
 {'klass': 'stopped',
@@ -150,7 +150,7 @@ Here are an example of an `asynchronous record`:
                         'line': '68'},
               'reason': 'breakpoint-hit',
               'thread-id': '0'},
-  'token': None,
+  'token': 42,
   'type': 'Exec'}
 
 >>> isinstance(record, Record)
@@ -174,6 +174,50 @@ Both kind of records, synchronous and asynchronous, have two additional attribut
  - `token`: used by GDB to match the request and the response.
  - `results`: the data contained in the message, it will depend of the GDB message.
 
+### Interference from Target
+
+If you do not redirect the target's output nor send it to a new console running
+the GDB `set new-console on` command, the output of the target will interfere an
+confuse the parser.
+
+Unfortunately there is not anything that we can do. Even if we ignore the message
+we cannot be sure when a message is safe to be discarded.
+
+For example, the following C code generates an ambiguous output:
+
+```c
+printf("~looks like a GDB stream but it isn't\n");
+```
+
+Even if you think that it is improbable, here is a quite common problem:
+
+```c
+printf("normal output 42"); /* no newline at the end */
+fflush(stdout); /* but we flush to the console anyway */
+```
+
+Now imagine that GDB hits a breakpoint after the `fflush` instruction, what we will
+see is:
+
+```python
+>>> text = 'normal output 4242*stopped,reason="breakpoint-hit",<and so on...>\n'
+
+```
+
+The problem is that all those strings are glued together which can lead to
+_nasty bugs_. We could try to use some regexps but it would be 
+too fragile (is the `token` 42 or 4242?).
+
+Instead we try to warn you if you try to parse something like that:
+
+```python
+>>> out.parse_line(text)                     #doctest: +IGNORE_EXCEPTION_DETAIL
+Traceback (most recent call last):
+ParsingError: Invalid input. Maybe the target's output is interfering with the GDB MI's messages. Try to redirect the target's output to elsewhere or run GDB's 'set new-console on' command. Found at 0 position.
+Original message:
+  normal output 4242*stopped,reason="breakpoint-hit",<and so on...>
+
+```
 
 ## Install
 
