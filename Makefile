@@ -5,6 +5,7 @@ all:
 	exit 1
 
 test:
+	python -m doctest README.md
 	python -m doctest regress/*.rst
 
 dist:
