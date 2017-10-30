@@ -2,18 +2,23 @@ import re, pprint
 DIGITS = re.compile('\d+(\.\d+)?')
 
 class ParsingError(Exception):
-   def __init__(self, message, raw, error_found_at):
-      begin = (error_found_at-30) if error_found_at >= 30 else 0
-      end   = (error_found_at+30)
+   def __init__(self, message, raw, error_found_at, include_context=True):
+      if include_context:
+         begin = (error_found_at-30) if error_found_at >= 30 else 0
+         end   = (error_found_at+30)
 
-      msg = "%s. Found near:\n  %s\n%s\nOriginal message:\n  %s" % (message, raw[begin:end], " -" * 40, raw)
+         ctx = ", near context:\n  %s\n%s" % (raw[begin:end], " -" * 40)
+
+      else:
+         ctx = "."
+
+      msg = "%s. Found at %i position%s\nOriginal message:\n  %s" % (message, error_found_at, ctx, raw)
       Exception.__init__(self, msg)
 
 class UnexpectedToken(ParsingError):
    def __init__(self, token, raw, error_found_at):
       msg = "Unexpected token '%c'." % token
       ParsingError.__init__(self, msg, raw, error_found_at)
-
 
 def check_end_of_input_at_begin(func):
    def wrapper(self, string, offset):
@@ -269,6 +274,8 @@ class AsyncOutput:
       return pprint.pformat(self.as_native())
 
 class AsyncRecord:
+   Symbols = ("*", "+", "=")
+
    @check_end_of_input_at_begin
    def parse(self, string, offset):
       try:
@@ -295,9 +302,11 @@ class AsyncRecord:
       return pprint.pformat(self.as_native())
 
 class StreamRecord:
+   Symbols = ("~", "@", "&")
+
    @check_end_of_input_at_begin
    def parse(self, string, offset):
-      if not string[offset] in ("~", "@", "&"):
+      if not string[offset] in StreamRecord.Symbols:
          raise UnexpectedToken(string[offset], string, offset)
 
       try:
@@ -333,10 +342,11 @@ class Stream:
       return vars(self)
 
 class ResultRecord:
+   Symbols = ("^",)
 
    @check_end_of_input_at_begin
    def parse(self, string, offset):
-      if not string[offset] == "^":
+      if not string[offset] in ResultRecord.Symbols:
          raise UnexpectedToken(string[offset], string, offset)
       offset += 1
 
@@ -432,10 +442,32 @@ class Output:
          # we always return this string
          return "(gdb)" 
 
-      if line[0] in ("~", "@", "&"):
+      # StreamRecords don't have a token, so we can parse them right here
+      if line[0] in StreamRecord.Symbols:
          out = StreamRecord()
          out.parse(line, 0)
          return out.as_native()
+      
+      # parse the token, if any
+      token = DIGITS.match(line)
+      offset = 0
+      if token:
+         token = token.group()
+         offset += len(token)
+         token = int(token)
+
+      else:
+         token = None
+
+      # Result/Async Record time
+      if line[offset] in ResultRecord.Symbols:
+         out = ResultRecord()
+      elif line[offset] in AsyncRecord.Symbols:
+         out = AsyncRecord()
+      else:
+         raise ParsingError("Invalid input. Maybe the target's output is interfering with the GDB MI's messages. Try to redirect the target's output to elsewhere or run GDB's 'set new-console on' command",
+                    line[:72], offset, include_context=False)
+
 
       # ###############
       # Workaround: handle the GDB's bug https://sourceware.org/bugzilla/show_bug.cgi?id=14733
@@ -453,21 +485,6 @@ class Output:
 
       #
       ################
-              
-      token = DIGITS.match(line)
-      offset = 0
-      if token:
-         token = token.group()
-         offset += len(token)
-         token = int(token)
-
-      else:
-         token = None
-
-      if line[offset] == "^":
-         out = ResultRecord()
-      else:
-         out = AsyncRecord()
 
       offset = out.parse(line, offset)
 
