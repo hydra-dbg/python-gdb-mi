@@ -32,7 +32,7 @@ def check_end_of_input_at_begin(func):
 def _attributes_as_string(instance):
    attrnames = filter(lambda attrname: not attrname.startswith("_"), dir(instance))
    attrnames = filter(lambda attrname: not callable(getattr(instance, attrname)), attrnames)
-   
+
    return pprint.pformat(dict([(attrname, getattr(instance, attrname)) for attrname in attrnames]))
 
 def text_escape(bytes_or_str):
@@ -115,7 +115,7 @@ class CString:
          raise ParsingError("Wrong begin. Expected a double quote '\"'.", string, offset)
 
       end = False
-      
+
       escaped = False
       for i, c in enumerate(string[offset+1:]):
          if c == '"' and not escaped:
@@ -148,7 +148,7 @@ class Tuple:
          raise ParsingError("Wrong begin. Expected a '{'.", string, offset)
 
       self.value = []
-      
+
       offset += 1
       while string[offset] != '}':
          self.value.append(Result())
@@ -190,7 +190,7 @@ class List:
          raise ParsingError("Wrong begin. Expected a '['.", string, offset)
 
       self.value = []
-      
+
       offset += 1
 
       if string[offset] != ']':
@@ -211,7 +211,7 @@ class List:
 
 
       return offset + 1
-   
+
    def as_native(self):
       return [val.as_native() for val in self.value]
 
@@ -266,7 +266,6 @@ class AsyncOutput:
          else:
             native[key] = val
 
-      
       return Record(klass= self.async_class.as_native(),
                results=native)
 
@@ -374,7 +373,7 @@ class ResultRecord:
          else:
             native[key] = val
 
-      r = Record( klass = self.result_class.as_native(), 
+      r = Record( klass = self.result_class.as_native(),
                   results = native)
       r.type = 'Sync'
       return r
@@ -386,7 +385,7 @@ class Record:
    def __init__(self, klass, results):
       self.klass = klass
       self.results = results
-      
+
       self.token = None
       self.type = None
 
@@ -417,37 +416,37 @@ class Output:
 
           if rest:
               self._chunks.append(rest)
-          
+
           if '\n' in rest:
               self._more_lines_in_buffer = True
 
           record = self.parse_line(line)
           assert record is not None
           return record
-      
+
       else:
           self._chunks.append(chunk)
           return None
-      
+
    def parse_line(self, line):
       assert line[-1] == '\n'
 
-      #import pdb; pdb.set_trace()        #     :)  
+      #import pdb; pdb.set_trace()        #     :)
       #if "BreakpointTable" in line:
-      #   import pdb; pdb.set_trace()        #     :)  
+      #   import pdb; pdb.set_trace()        #     :)
 
       #XXX the space between the string and the newline is not specified in the
       # GDB's documentation. However it's seems to be necessary.
-      if line == "(gdb) \n": 
+      if line == "(gdb) \n":
          # we always return this string
-         return "(gdb)" 
+         return "(gdb)"
 
       # StreamRecords don't have a token, so we can parse them right here
       if line[0] in StreamRecord.Symbols:
          out = StreamRecord()
          out.parse(line, 0)
          return out.as_native()
-      
+
       # parse the token, if any
       token = DIGITS.match(line)
       offset = 0
@@ -495,7 +494,4 @@ class Output:
       record = out.as_native()
       record.token = token
       return record
-
-
-
 

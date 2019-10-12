@@ -2,14 +2,14 @@
 
 # Python GDB MI Parser
 
-[MI](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI.html) or 
+[MI](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI.html) or
 Machine Interface is the new interface to interact with GDB, the GNU Debugger,
 from another program.
 
 The output of the GDB Machine Interface is line oriented, text based.
 It is compound of small elements that range from strings to dictionaries
 
-`python-gdb-mi` is simple and quite robust parser for Python 2.x/3.x that can 
+`python-gdb-mi` is simple and quite robust parser for Python 3.x that can
 take those lines and transform them into python objects ready to be serialized
 if need to JSON.
 
@@ -19,12 +19,11 @@ A GDB MI text can be like this:
 
 ```python
 >>> text = '^done,bkpt={number="1",type="breakpoint",disp="keep",enabled="y",addr="0x08048564",func="main",file="myprog.c",fullname="/home/nickrob/myprog.c",line="68",thread-groups=["i1"],times="0"}\n'
-
 ```
 
 This is the kind of message that GDB will print when a breakpoint is set.
 
-To parse it, we need to send this line to our `Output` parser using the 
+To parse it, we need to send this line to our `Output` parser using the
 `parse_line` method:
 
 ```python
@@ -33,7 +32,7 @@ To parse it, we need to send this line to our `Output` parser using the
 >>> out = Output()
 
 >>> record = out.parse_line(text)
->>> record                                #doctest: +NORMALIZE_WHITESPACE
+>>> record                                # byexample: +norm-ws
 {'klass': 'done',
  'results': {'bkpts': [{'addr': '0x08048564',
                         'disp': 'keep',
@@ -48,7 +47,6 @@ To parse it, we need to send this line to our `Output` parser using the
                         'type': 'breakpoint'}]},
  'token': None,
  'type': 'Sync'}
-
 ```
 
 If the output from GDB is not a complete line, `Output` can handle it anyways
@@ -57,7 +55,7 @@ doing some buffering. Use `parse` instead of `parse_line` to feed `Output`:
 ```python
 >>> out.parse(text[:10])     # incomplete line, None returned
 
->>> out.parse(text[10:])     # enough data, parse it! doctest: +NORMALIZE_WHITESPACE
+>>> out.parse(text[10:])     # enough data, parse it! # byexample: +norm-ws
 {'klass': 'done',
  'results': {'bkpts': [{'addr': '0x08048564',
                         'disp': 'keep',
@@ -72,7 +70,6 @@ doing some buffering. Use `parse` instead of `parse_line` to feed `Output`:
                         'type': 'breakpoint'}]},
  'token': None,
  'type': 'Sync'}
-
 ```
 
 ## Parsing Results
@@ -87,7 +84,7 @@ Three types of objects can be returned by `parse_line` and `parse`:
  - `(gdb)`     a literal string that represents an empty prompt line.
 
 Both, `Stream` and `Record` have a `as_native` method to transform them into a
-composition of Python's dicts and lists.
+composition of Python's dictionaries and lists.
 
 ### Streams
 
@@ -101,15 +98,14 @@ composition of Python's dicts and lists.
 
 >>> isinstance(stream, Stream)
 True
-
 ```
 
 The `type` attribute is [one of the following](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Output-Syntax.html#GDB_002fMI-Output-Syntax),
 from the GDB MI's documentation:
- - `Console`: output that should be displayed as is in the console. 
+ - `Console`: output that should be displayed as is in the console.
               It is the textual response to a CLI command.
  - `Target`: output produced by the target program.
- - `Log`: output text coming from GDB’s internals, for instance messages that 
+ - `Log`: output text coming from GDB’s internals, for instance messages that
           should be displayed as part of an error log.
 
 ### Records
@@ -125,7 +121,6 @@ True
 
 >>> record.klass, record.type
 ('done', 'Sync')
-
 ```
 
 The `klass` attribute is [one of the following](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Result-Records.html#GDB_002fMI-Result-Records): `done`, `running`, `connected`,
@@ -138,7 +133,7 @@ Here are an example of an `asynchronous record`:
 ```python
 >>> text = '42*stopped,reason="breakpoint-hit",disp="keep",bkptno="1",thread-id="0",frame={addr="0x08048564",func="main",args=[{name="argc",value="1"},{name="argv",value="0xbfc4d4d4"}],file="myprog.c",fullname="/home/nickrob/myprog.c",line="68"}\n'
 >>> record = out.parse_line(text)
->>> record                                #doctest: +NORMALIZE_WHITESPACE
+>>> record                                # byexample: +norm-ws
 {'klass': 'stopped',
   'results': {'bkptno': '1',
               'disp': 'keep',
@@ -159,7 +154,6 @@ True
 
 >>> record.klass, record.type
 ('stopped', 'Exec')
-
 ```
 
 For an `asynchronous record`, the attribute `type` is [one of the following](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Output-Syntax.html#GDB_002fMI-Output-Syntax) for `AsyncRecord`s:
@@ -202,22 +196,20 @@ see is:
 
 ```python
 >>> text = 'normal output 4242*stopped,reason="breakpoint-hit",<and so on...>\n'
-
 ```
 
 The problem is that all those strings are glued together which can lead to
-_nasty bugs_. We could try to use some regexps but it would be 
+**nasty bugs**. We could try to use some regexps but it would be
 too fragile (is the `token` 42 or 4242?).
 
 Instead we try to warn you if you try to parse something like that:
 
 ```python
->>> out.parse_line(text)                     #doctest: +IGNORE_EXCEPTION_DETAIL
+>>> out.parse_line(text)
 Traceback (most recent call last):
-ParsingError: Invalid input. Maybe the target's output is interfering with the GDB MI's messages. Try to redirect the target's output to elsewhere or run GDB's 'set new-console on' command. Found at 0 position.
+<...>ParsingError: Invalid input. Maybe the target's output is interfering with the GDB MI's messages. Try to redirect the target's output to elsewhere or run GDB's 'set new-console on' command. Found at 0 position.
 Original message:
-  normal output 4242*stopped,reason="breakpoint-hit",<and so on...>
-
+  normal output 4242*stopped,reason="breakpoint-hit",<...>
 ```
 
 ## Install
@@ -226,7 +218,6 @@ Just run:
 
 ```
 $ pip install python-gdb-mi
-
 ```
 
 You will find the `python-gdb-mi` package at [PyPI](https://pypi.python.org/pypi/python-gdb-mi)

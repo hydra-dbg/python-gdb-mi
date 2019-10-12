@@ -5,8 +5,7 @@ all:
 	exit 1
 
 test:
-	python -m doctest README.md
-	python -m doctest regress/*.rst
+	@byexample -l python --timeout 6 -- README.md regress/*.md
 
 dist:
 	rm -Rf dist/ build/ *.egg-info
