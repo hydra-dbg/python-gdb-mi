@@ -32,19 +32,19 @@ To parse it, we need to send this line to our `Output` parser using the
 >>> out = Output()
 
 >>> record = out.parse_line(text)
->>> record                                # byexample: +norm-ws
-{'klass': 'done',
- 'results': {'bkpts': [{'addr': '0x08048564',
-                        'disp': 'keep',
-                        'enabled': 'y',
-                        'file': 'myprog.c',
-                        'fullname': '/home/nickrob/myprog.c',
-                        'func': 'main',
-                        'line': '68',
-                        'number': '1',
-                        'thread-groups': ['i1'],
-                        'times': '0',
-                        'type': 'breakpoint'}]},
+>>> record
+{'bkpts': [{'addr': '0x08048564',
+            'disp': 'keep',
+            'enabled': 'y',
+            'file': 'myprog.c',
+            'fullname': '/home/nickrob/myprog.c',
+            'func': 'main',
+            'line': '68',
+            'number': '1',
+            'thread-groups': ['i1'],
+            'times': '0',
+            'type': 'breakpoint'}],
+ 'class': 'done',
  'token': None,
  'type': 'Sync'}
 ```
@@ -55,48 +55,51 @@ doing some buffering. Use `parse` instead of `parse_line` to feed `Output`:
 ```python
 >>> out.parse(text[:10])     # incomplete line, None returned
 
->>> out.parse(text[10:])     # enough data, parse it! # byexample: +norm-ws
-{'klass': 'done',
- 'results': {'bkpts': [{'addr': '0x08048564',
-                        'disp': 'keep',
-                        'enabled': 'y',
-                        'file': 'myprog.c',
-                        'fullname': '/home/nickrob/myprog.c',
-                        'func': 'main',
-                        'line': '68',
-                        'number': '1',
-                        'thread-groups': ['i1'],
-                        'times': '0',
-                        'type': 'breakpoint'}]},
+>>> out.parse(text[10:])     # enough data, parse it!
+{'bkpts': [{'addr': '0x08048564',
+            'disp': 'keep',
+            'enabled': 'y',
+            'file': 'myprog.c',
+            'fullname': '/home/nickrob/myprog.c',
+            'func': 'main',
+            'line': '68',
+            'number': '1',
+            'thread-groups': ['i1'],
+            'times': '0',
+            'type': 'breakpoint'}],
+ 'class': 'done',
  'token': None,
  'type': 'Sync'}
 ```
 
 ## Parsing Results
 
-Three types of objects can be returned by `parse_line` and `parse`:
+Four types of objects can be returned by `parse_line` and `parse`:
 
- - `Stream`    that represents an [output record](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Stream-Records.html#GDB_002fMI-Stream-Records) from: the console, 
-               the target and the log.
- - `Record`    that represents or a synchronous [result record](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Result-Records.html#GDB_002fMI-Result-Records) and
-               or an out of band [asynchronous record](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Async-Records.html#GDB_002fMI-Async-Records), 
-               used to notify of changes that have happen.
- - `(gdb)`     a literal string that represents an empty prompt line.
+ - `StreamRecord`    that represents an [output record](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Stream-Records.html#GDB_002fMI-Stream-Records) from: the console, 
+                     the target and the log.
+ - `ResultRecord`    that represents or a synchronous [result record](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Result-Records.html#GDB_002fMI-Result-Records)
+ - `AsyncRecord`     an out of band [asynchronous record](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Async-Records.html#GDB_002fMI-Async-Records), 
+                     used to notify of changes that have happen.
+ - `(gdb)`           the literal string that represents an empty prompt line.
 
-Both, `Stream` and `Record` have a `as_native` method to transform them into a
+All except the literal `(gdb)` have a `as_native` method to transform them into a
 composition of Python's dictionaries and lists.
 
 ### Streams
 
 ```python
->>> from gdb_mi import Stream
+>>> from gdb_mi import StreamRecord
 
 >>> text = '~"GDB rocks!"\n'
 >>> stream = out.parse_line(text)
 >>> stream      # same as pprint.pprint(stream.as_native())
-{'stream': 'GDB rocks!', 'type': 'Console'}
+{'type': 'Console', 'value': 'GDB rocks!'}
 
->>> isinstance(stream, Stream)
+>>> isinstance(stream, StreamRecord)
+True
+
+>>> stream.is_stream()
 True
 ```
 
@@ -114,45 +117,48 @@ We have already seen an example of a `Record`, in that case it was a synchronous
 `result record`:
 
 ```python
->>> from gdb_mi import Record
+>>> from gdb_mi import ResultRecord
 
->>> isinstance(record, Record)
+>>> isinstance(record, ResultRecord)
 True
 
->>> record.klass, record.type
+>>> record.result_class, record.type
 ('done', 'Sync')
 ```
 
-The `klass` attribute is [one of the following](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Result-Records.html#GDB_002fMI-Result-Records): `done`, `running`, `connected`,
-`error` or `exit`.
+The `result_class` attribute is [one of the following](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Result-Records.html#GDB_002fMI-Result-Records):
+`done`, `running`, `connected`, `error` or `exit`.
 
 The `type` attribute is `Sync` for a `synchronous result record`.
 
 Here are an example of an `asynchronous record`:
 
 ```python
+>>> from gdb_mi import AsyncRecord
+
 >>> text = '42*stopped,reason="breakpoint-hit",disp="keep",bkptno="1",thread-id="0",frame={addr="0x08048564",func="main",args=[{name="argc",value="1"},{name="argv",value="0xbfc4d4d4"}],file="myprog.c",fullname="/home/nickrob/myprog.c",line="68"}\n'
 >>> record = out.parse_line(text)
->>> record                                # byexample: +norm-ws
-{'klass': 'stopped',
-  'results': {'bkptno': '1',
-              'disp': 'keep',
-              'frame': {'addr': '0x08048564',
-                        'args': [{'name': 'argc', 'value': '1'},
-                                 {'name': 'argv', 'value': '0xbfc4d4d4'}],
-                        'file': 'myprog.c',
-                        'fullname': '/home/nickrob/myprog.c',
-                        'func': 'main',
-                        'line': '68'},
-              'reason': 'breakpoint-hit',
-              'thread-id': '0'},
-  'token': 42,
-  'type': 'Exec'}
 
->>> isinstance(record, Record)
+>>> record
+{'bkptno': '1',
+ 'class': 'stopped',
+ 'disp': 'keep',
+ 'frame': {'addr': '0x08048564',
+           'args': [{'name': 'argc', 'value': '1'},
+                    {'name': 'argv', 'value': '0xbfc4d4d4'}],
+           'file': 'myprog.c',
+           'fullname': '/home/nickrob/myprog.c',
+           'func': 'main',
+           'line': '68'},
+ 'reason': 'breakpoint-hit',
+ 'thread-id': '0',
+ 'token': 42,
+ 'type': 'Exec'}
+
+>>> isinstance(record, AsyncRecord)
 True
 
->>> record.klass, record.type
+>>> record.async_class, record.type
 ('stopped', 'Exec')
 ```
 
@@ -165,9 +171,8 @@ From the GDB MI's documentation:
  - `Notify`: supplementary information that the client should handle (e.g., a new breakpoint information).
 
 
-Both kind of records, synchronous and asynchronous, have two additional attributes:
+Both kind of records, synchronous and asynchronous, have one additional attribute:
  - `token`: used by GDB to match the request and the response.
- - `results`: the data contained in the message, it will depend of the GDB message.
 
 ### Interference from Target
 

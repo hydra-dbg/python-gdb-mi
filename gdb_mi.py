@@ -29,6 +29,20 @@ def check_end_of_input_at_begin(func):
 
    return wrapper
 
+def tuples_as_native_dict(tuples):
+  native = {}
+  for result in tuples:
+     key, val = result.as_native_key_value()
+     if key in native:
+        if isinstance(native[key], list):
+           native[key].append(val)
+        else:
+           native[key] = [native[key], val]
+     else:
+        native[key] = val
+
+  return native
+
 def _attributes_as_string(instance):
    attrnames = filter(lambda attrname: not attrname.startswith("_"), dir(instance))
    attrnames = filter(lambda attrname: not callable(getattr(instance, attrname)), attrnames)
@@ -167,18 +181,7 @@ class Tuple:
       return offset + 1
 
    def as_native(self):
-      native = {}
-      for result in self.value:
-         key, val = result.as_native_key_value()
-         if key in native:
-            if isinstance(native[key], list):
-               native[key].append(val)
-            else:
-               native[key] = [native[key], val]
-         else:
-            native[key] = val
-
-      return native
+      return tuples_as_native_dict(self.value)
 
    def __repr__(self):
       return pprint.pformat(self.as_native())
@@ -239,9 +242,39 @@ class Word:
       return pprint.pformat(self.as_native())
 
 
-class AsyncOutput:
+class Record:
+    def is_stream(self, of_type=None):
+        raise NotImplementedError("Subclass responsability")
+    def is_async(self, of_type=None):
+        raise NotImplementedError("Subclass responsability")
+    def is_result(self, of_class=None):
+        raise NotImplementedError("Subclass responsability")
+    def __repr__(self):
+        return pprint.pformat(self.as_native())
+
+    def _rename_keywords(self, _dict):
+        for k in ('class', 'type', 'token'):
+            if k in _dict:
+                _dict['_' + k] = _dict[k]
+                del _dict[k]
+
+class AsyncRecord(Record):
+   Symbols = ("*", "+", "=")
+
    @check_end_of_input_at_begin
    def parse(self, string, offset):
+      self.token = getattr(self, 'token', None)
+      try:
+         self.type = {
+               "*": "Exec",
+               "+": "Status",
+               "=": "Notify",
+               }[string[offset]]
+      except KeyError:
+         raise UnexpectedToken(string[offset], string, offset)
+
+      offset += 1
+
       self.async_class = Word((',', '\r', '\n'))
       offset = self.async_class.parse(string, offset)
 
@@ -255,52 +288,31 @@ class AsyncOutput:
       return offset
 
    def as_native(self):
-      native = {}
-      for result in self.results:
-         key, val = result.as_native_key_value()
-         if key in native:
-            if isinstance(native[key], list):
-               native[key].append(val)
-            else:
-               native[key] = [native[key], val]
-         else:
-            native[key] = val
+      native = tuples_as_native_dict(self.results)
 
-      return Record(klass= self.async_class.as_native(),
-               results=native)
+      self._rename_keywords(native)
+      native['class'] = self.async_class.as_native()
+      native['type'] = self.type
+      native['token'] = self.token
+      return native
 
-   def __repr__(self):
-      return pprint.pformat(self.as_native())
+   def is_async(self, of_type=None):
+       if of_type is None:
+           return True
 
-class AsyncRecord:
-   Symbols = ("*", "+", "=")
+       if isinstance(of_type, (tuple,list,set)):
+           return self.type in of_type
+       elif isinstance(of_type, (str,bytes)):
+           return self.type == of_type
 
-   @check_end_of_input_at_begin
-   def parse(self, string, offset):
-      try:
-         self.type = {
-               "*": "Exec",
-               "+": "Status",
-               "=": "Notify",
-               }[string[offset]]
-      except KeyError:
-         raise UnexpectedToken(string[offset], string, offset)
+       raise ValueError("Invalid argument. Expected tuple/list/set, str or None")
 
-      offset += 1
-      self.output = AsyncOutput()
-      offset = self.output.parse(string, offset)
+   def is_stream(self, of_type=None):
+       return False
+   def is_result(self, of_class=None):
+       return False
 
-      return offset
-
-   def as_native(self):
-      d = self.output.as_native()
-      d.type = self.type
-      return d
-
-   def __repr__(self):
-      return pprint.pformat(self.as_native())
-
-class StreamRecord:
+class StreamRecord(Record):
    Symbols = ("~", "@", "&")
 
    @check_end_of_input_at_begin
@@ -324,27 +336,32 @@ class StreamRecord:
       return offset
 
    def as_native(self):
-      return Stream(self.type, self.value.as_native())
+       return {'type': self.type, 'value': self.value.as_native()}
 
-   def __repr__(self):
-      return pprint.pformat(self.as_native())
+   def is_stream(self, of_type=None):
+       if of_type is None:
+           return True
 
-class Stream:
-   def __init__(self, type, s):
-      self.type = type
-      self.stream = s
+       if isinstance(of_type, (tuple,list,set)):
+           return self.type in of_type
+       elif isinstance(of_type, (str,bytes)):
+           return self.type == of_type
 
-   def __repr__(self):
-      return _attributes_as_string(self)
+       raise ValueError("Invalid argument. Expected tuple/list/set, str or None")
 
-   def as_native(self):
-      return vars(self)
+   def is_async(self, of_type=None):
+       return False
+   def is_result(self, of_class=None):
+       return False
 
-class ResultRecord:
+
+class ResultRecord(Record):
    Symbols = ("^",)
 
    @check_end_of_input_at_begin
    def parse(self, string, offset):
+      self.token = getattr(self, 'token', None)
+      self.type = 'Sync'
       if not string[offset] in ResultRecord.Symbols:
          raise UnexpectedToken(string[offset], string, offset)
       offset += 1
@@ -361,43 +378,42 @@ class ResultRecord:
 
       return offset
 
+   def is_result(self, of_class=None):
+       if of_class is None:
+           return True
+
+       _class = self.result_class.as_native()
+       if isinstance(of_class, (tuple,list,set)):
+           return _class in of_class
+       elif isinstance(of_class, (str,bytes)):
+           return _class == of_class
+
+       raise ValueError("Invalid argument. Expected tuple/list/set, str or None")
+
+   def is_stream(self, of_type=None):
+       return False
+   def is_async(self, of_type=None):
+       return False
+
    def as_native(self):
-      native = {}
-      for result in self.results:
-         key, val = result.as_native_key_value()
-         if key in native:
-            if isinstance(native[key], list):
-               native[key].append(val)
-            else:
-               native[key] = [native[key], val]
-         else:
-            native[key] = val
+      native = tuples_as_native_dict(self.results)
 
-      r = Record( klass = self.result_class.as_native(),
-                  results = native)
-      r.type = 'Sync'
-      return r
+      self._rename_keywords(native)
 
-   def __repr__(self):
-      return pprint.pformat(self.as_native())
-
-class Record:
-   def __init__(self, klass, results):
-      self.klass = klass
-      self.results = results
-
-      self.token = None
-      self.type = None
-
-   def __repr__(self):
-      return _attributes_as_string(self)
-
+      native['class'] = self.result_class.as_native()
+      native['type'] = self.type
+      native['token'] = self.token
+      return native
 
 class Output:
-   def __init__(self):
+   def __init__(self, nl='\n'):
       self._line = None
       self._chunks = []
       self._more_lines_in_buffer = False
+      self._nl = nl
+      assert self._nl
+
+      self._termination = "(gdb) " + self._nl
 
    def are_more_to_be_parsed_already(self):
       return self._more_lines_in_buffer
@@ -429,7 +445,7 @@ class Output:
           return None
 
    def parse_line(self, line):
-      assert line[-1] == '\n'
+      assert line.endswith(self._nl)
 
       #import pdb; pdb.set_trace()        #     :)
       #if "BreakpointTable" in line:
@@ -437,7 +453,7 @@ class Output:
 
       #XXX the space between the string and the newline is not specified in the
       # GDB's documentation. However it's seems to be necessary.
-      if line == "(gdb) \n":
+      if line == self._termination:
          # we always return this string
          return "(gdb)"
 
@@ -445,7 +461,7 @@ class Output:
       if line[0] in StreamRecord.Symbols:
          out = StreamRecord()
          out.parse(line, 0)
-         return out.as_native()
+         return out
 
       # parse the token, if any
       token = DIGITS.match(line)
@@ -477,21 +493,22 @@ class Output:
 
       if "^done,bkpt={" in line:
          line = line.replace("^done,bkpt={", "^done,bkpts=[{")
-         line = line[:-1] + "]\n"
+         line = line[:-1] + "]" + self._nl
       elif "=breakpoint-modified,bkpt={" in line:
          line = line.replace("=breakpoint-modified,bkpt={", "=breakpoints-modified,bkpts=[{")
-         line = line[:-1] + "]\n"
+         line = line[:-1] + "]" + self._nl
 
       #
       ################
 
       offset = out.parse(line, offset)
+      next_offset = offset + len(self._nl)
 
-      if len(line) != offset + 1:
-          raise ParsingError("Length line %i is different from the last parsed offset %i" % (len(line), offset+1),
+      if len(line) != next_offset:
+          raise ParsingError("Length line %i is different from the last parsed offset %i" % (len(line), next_offset),
                   line, offset)
 
-      record = out.as_native()
+      record = out
       record.token = token
       return record
 

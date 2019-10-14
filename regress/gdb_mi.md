@@ -229,20 +229,31 @@ are emitted by GDB to notify about changes that happen like a breakpoint hit:
 >>> r.parse('*foo\n', 0)
 4
 >>> r    # again, this is the same as pprint.pprint(r.as_native())
-{'klass': 'foo', 'results': {}, 'token': None, 'type': 'Exec'}
+{'class': 'foo', 'token': None, 'type': 'Exec'}
+
+>>> r.is_async()
+True
+>>> r.is_async(of_type='Exec')
+True
+>>> r.is_async(of_type='Status')
+False
+>>> r.is_async(of_type=('Status', 'Exec'))
+True
 
 >>> r.parse('+bar,a="b"\n', 0)
 10
 >>> r
-{'klass': 'bar', 'results': {'a': 'b'}, 'token': None, 'type': 'Status'}
+{'a': 'b', 'class': 'bar', 'token': None, 'type': 'Status'}
 
->>> r.parse('=baz,a=[],b={c="d"}\n', 0)
-19
->>> r                   # byexample: +norm-ws
-{'klass': 'baz',
-'results': {'a': [], 'b': {'c': 'd'}},
-'token': None,
-'type': 'Notify'}
+>>> r.parse('=baz,a=[],b={c="d"},type="z"\n', 0)
+28
+>>> r
+{'_type': 'z',
+ 'a': [],
+ 'b': {'c': 'd'},
+ 'class': 'baz',
+ 'token': None,
+ 'type': 'Notify'}
 ```
 
 ## Result Records (Sync)
@@ -252,10 +263,19 @@ of a GDB command:
 
 ```python
 >>> r = ResultRecord()
->>> r.parse('^bar,a="b"\n', 0)
-10
+>>> r.parse('^bar,a="b",token="32"\n', 0)
+21
 >>> r
-{'klass': 'bar', 'results': {'a': 'b'}, 'token': None, 'type': 'Sync'}
+{'_token': '32', 'a': 'b', 'class': 'bar', 'token': None, 'type': 'Sync'}
+
+>>> r.is_result()
+True
+>>> r.is_result(of_class='bar')
+True
+>>> r.is_result(of_class='zaz')
+False
+>>> r.is_result(of_class=('zaz', 'bar'))
+True
 ```
 
 ## Stream Records
@@ -269,17 +289,26 @@ named [stream records](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Stre
 >>> s.parse('~"foo"\n', 0)
 6
 >>> s
-{'stream': 'foo', 'type': 'Console'}
+{'type': 'Console', 'value': 'foo'}
 
 >>> s.parse('@"bar"\n', 0)
 6
 >>> s
-{'stream': 'bar', 'type': 'Target'}
+{'type': 'Target', 'value': 'bar'}
 
 >>> s.parse('&"baz"\n', 0)
 6
 >>> s # again, this is a shortcut for pprint.pprint(s.as_native())
-{'stream': 'baz', 'type': 'Log'}
+{'type': 'Log', 'value': 'baz'}
+
+>>> s.is_stream()
+True
+>>> s.is_stream(of_type='Log')
+True
+>>> s.is_stream(of_type='Console')
+False
+>>> s.is_stream(of_type=('Console', 'Log'))
+True
 ```
 
 ## Output
@@ -303,7 +332,7 @@ Call ``parse_line`` to parse a full GDB MI message to retrieve the parsed object
 >>> text = '~"foo"\n'
 >>> stream = o.parse_line(text)
 >>> stream
-{'stream': 'foo', 'type': 'Console'}
+{'type': 'Console', 'value': 'foo'}
 ```
 
 Call ``parse`` to feed the parser with a partial GDB MI message.
@@ -317,7 +346,7 @@ If enough data is given, it will return the parsed object like
 
 >>> stream = o.parse(text[3:])  # feed the rest of the message, return the parsed object
 >>> stream
-{'stream': 'bar', 'type': 'Console'}
+{'type': 'Console', 'value': 'bar'}
 ```
 
 
@@ -328,29 +357,30 @@ As an example, this is the message when a execution is stopped:
 
 >>> text = '*stopped,reason="breakpoint-hit",disp="keep",bkptno="1",thread-id="0",frame={addr="0x08048564",func="main",args=[{name="argc",value="1"},{name="argv",value="0xbfc4d4d4"}],file="myprog.c",fullname="/home/nickrob/myprog.c",line="68"}\n'
 >>> record = o.parse_line(text)
->>> record.klass, record.type
+>>> record.async_class, record.type
 ('stopped', 'Exec')
->>> len(record.results)
-5
->>> record.results['reason'], record.results['disp'], record.results['bkptno'], record.results['thread-id']
+>>> results = record.as_native()
+>>> len(results)
+8
+>>> results['reason'], results['disp'], results['bkptno'], results['thread-id']
 ('breakpoint-hit', 'keep', '1', '0')
 >>> record             # byexample: +norm-ws
-{'klass': 'stopped',
-'results': {'bkptno': '1',
-           'disp': 'keep',
-           'frame': {'addr': '0x08048564',
-                     'args': [{'name': 'argc', 'value': '1'},
-                              {'name': 'argv', 'value': '0xbfc4d4d4'}],
-                     'file': 'myprog.c',
-                     'fullname': '/home/nickrob/myprog.c',
-                     'func': 'main',
-                     'line': '68'},
-           'reason': 'breakpoint-hit',
-           'thread-id': '0'},
-'token': None,
-'type': 'Exec'}
+{'bkptno': '1',
+ 'class': 'stopped',
+ 'disp': 'keep',
+ 'frame': {'addr': '0x08048564',
+           'args': [{'name': 'argc', 'value': '1'},
+                    {'name': 'argv', 'value': '0xbfc4d4d4'}],
+           'file': 'myprog.c',
+           'fullname': '/home/nickrob/myprog.c',
+           'func': 'main',
+           'line': '68'},
+ 'reason': 'breakpoint-hit',
+ 'thread-id': '0',
+ 'token': None,
+ 'type': 'Exec'}
 
->>> frame = record.results['frame']
+>>> frame = record.as_native()['frame']
 >>> frame['addr'], frame['func'], frame['file'], frame['fullname'], frame['line']
 ('0x08048564', 'main', 'myprog.c', '/home/nickrob/myprog.c', '68')
 
