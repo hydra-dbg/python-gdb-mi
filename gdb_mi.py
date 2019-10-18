@@ -277,6 +277,7 @@ class AsyncRecord(Record):
 
       self.async_class = Word((',', '\r', '\n'))
       offset = self.async_class.parse(string, offset)
+      self.async_class = self.async_class.as_native()
 
       self.results = []
 
@@ -287,11 +288,14 @@ class AsyncRecord(Record):
 
       return offset
 
-   def as_native(self):
+   def as_native(self, include_headers=True):
       native = tuples_as_native_dict(self.results)
-
       self._rename_keywords(native)
-      native['class'] = self.async_class.as_native()
+
+      if not include_headers:
+          return native
+
+      native['class'] = self.async_class
       native['type'] = self.type
       native['token'] = self.token
       return native
@@ -335,8 +339,13 @@ class StreamRecord(Record):
 
       return offset
 
-   def as_native(self):
-       return {'type': self.type, 'value': self.value.as_native()}
+   def as_native(self, include_headers=True):
+      native = {'value': self.value.as_native()}
+      if not include_headers:
+         return native
+
+      native['type'] = self.type
+      return native
 
    def is_stream(self, of_type=None):
        if of_type is None:
@@ -361,13 +370,15 @@ class ResultRecord(Record):
    @check_end_of_input_at_begin
    def parse(self, string, offset):
       self.token = getattr(self, 'token', None)
-      self.type = 'Sync'
+      self.type = 'Result'
       if not string[offset] in ResultRecord.Symbols:
          raise UnexpectedToken(string[offset], string, offset)
       offset += 1
 
       self.result_class = Word((',', '\r', '\n'))
       offset = self.result_class.parse(string, offset)
+
+      self.result_class = self.result_class.as_native()
 
       self.results = []
 
@@ -382,7 +393,7 @@ class ResultRecord(Record):
        if of_class is None:
            return True
 
-       _class = self.result_class.as_native()
+       _class = self.result_class
        if isinstance(of_class, (tuple,list,set)):
            return _class in of_class
        elif isinstance(of_class, (str,bytes)):
@@ -395,15 +406,35 @@ class ResultRecord(Record):
    def is_async(self, of_type=None):
        return False
 
-   def as_native(self):
+   def as_native(self, include_headers=True):
       native = tuples_as_native_dict(self.results)
 
       self._rename_keywords(native)
+      if not include_headers:
+          return native
 
-      native['class'] = self.result_class.as_native()
+      native['class'] = self.result_class
       native['type'] = self.type
       native['token'] = self.token
       return native
+
+class TerminationRecord(Record):
+    def is_stream(self, of_type=None):
+        return False
+    def is_async(self, of_type=None):
+        return False
+    def is_result(self, of_class=None):
+        return False
+    def __repr__(self):
+        return repr("(gdb)")
+    def __eq__(self, other):
+        return other == "(gdb)"
+    def __ne__(self, other):
+        return other != "(gdb)"
+    def __hash__(self):
+        return hash("(gdb)")
+
+_TerminationRecordObj = TerminationRecord()
 
 class Output:
    def __init__(self, nl='\n'):
@@ -454,8 +485,8 @@ class Output:
       #XXX the space between the string and the newline is not specified in the
       # GDB's documentation. However it's seems to be necessary.
       if line == self._termination:
-         # we always return this string
-         return "(gdb)"
+         # we always return this special record instance
+         return _TerminationRecordObj
 
       # StreamRecords don't have a token, so we can parse them right here
       if line[0] in StreamRecord.Symbols:
@@ -493,10 +524,10 @@ class Output:
 
       if "^done,bkpt={" in line:
          line = line.replace("^done,bkpt={", "^done,bkpts=[{")
-         line = line[:-1] + "]" + self._nl
+         line = line[:-len(self._nl)] + "]" + self._nl
       elif "=breakpoint-modified,bkpt={" in line:
          line = line.replace("=breakpoint-modified,bkpt={", "=breakpoints-modified,bkpts=[{")
-         line = line[:-1] + "]" + self._nl
+         line = line[:-len(self._nl)] + "]" + self._nl
 
       #
       ################

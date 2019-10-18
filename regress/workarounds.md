@@ -69,7 +69,7 @@ one breakpoint:
 >>> text = '^done,bkpt={number="1",type="breakpoint",disp="keep",enabled="y",addr="0x08048564",func="main",file="myprog.c",fullname="/home/nickrob/myprog.c",line="68",thread-groups=["i1"],times="0"}\n'
 >>> record = o.parse_line(text)
 >>> record.result_class, record.type
-('done', 'Sync')
+('done', 'Result')
 
 >>> record
 {'bkpts': [{'addr': '0x08048564',
@@ -85,7 +85,7 @@ one breakpoint:
             'type': 'breakpoint'}],
  'class': 'done',
  'token': None,
- 'type': 'Sync'}
+ 'type': 'Result'}
 ```
 
 Due the same bug, we need to modify the event ``BreakpointTable`` which lists
@@ -196,5 +196,5 @@ Here is the fix:
                      'nr_rows': '3'},
  'class': 'done',
  'token': None,
- 'type': 'Sync'}
+ 'type': 'Result'}
 ```

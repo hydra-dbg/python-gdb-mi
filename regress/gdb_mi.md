@@ -266,7 +266,7 @@ of a GDB command:
 >>> r.parse('^bar,a="b",token="32"\n', 0)
 21
 >>> r
-{'_token': '32', 'a': 'b', 'class': 'bar', 'token': None, 'type': 'Sync'}
+{'_token': '32', 'a': 'b', 'class': 'bar', 'token': None, 'type': 'Result'}
 
 >>> r.is_result()
 True

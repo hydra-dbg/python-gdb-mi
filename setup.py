@@ -26,7 +26,7 @@ setup(
     # Author details
     author='Di Paola Martin, Di Tomaso Nicolas',
     author_email='no-email@example.com',
-    
+
     license='GNU LGPLv3',
 
     # See https://pypi.python.org/pypi?%3Aaction=list_classifiers

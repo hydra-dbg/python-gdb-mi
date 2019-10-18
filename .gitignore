@@ -2,3 +2,5 @@
 __pycache__
 dist
 .*.swp
+README.rst
+python_gdb_mi.egg-info/

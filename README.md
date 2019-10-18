@@ -46,7 +46,7 @@ To parse it, we need to send this line to our `Output` parser using the
             'type': 'breakpoint'}],
  'class': 'done',
  'token': None,
- 'type': 'Sync'}
+ 'type': 'Result'}
 ```
 
 If the output from GDB is not a complete line, `Output` can handle it anyways
@@ -69,7 +69,7 @@ doing some buffering. Use `parse` instead of `parse_line` to feed `Output`:
             'type': 'breakpoint'}],
  'class': 'done',
  'token': None,
- 'type': 'Sync'}
+ 'type': 'Result'}
 ```
 
 ## Parsing Results
@@ -123,13 +123,13 @@ We have already seen an example of a `Record`, in that case it was a synchronous
 True
 
 >>> record.result_class, record.type
-('done', 'Sync')
+('done', 'Result')
 ```
 
 The `result_class` attribute is [one of the following](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Result-Records.html#GDB_002fMI-Result-Records):
 `done`, `running`, `connected`, `error` or `exit`.
 
-The `type` attribute is `Sync` for a `synchronous result record`.
+The `type` attribute is `Result` for a `result record`.
 
 Here are an example of an `asynchronous record`:
 
